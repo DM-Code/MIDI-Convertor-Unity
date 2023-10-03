@@ -1,0 +1,73 @@
+Please, read this before updating:
+   - Backup your own project
+   - If you experiment errors after updating, please delete the MidiPlayer folder from your project then reinstall Maestro.
+
+Thank for your comments and talks, that help a lot to make Maestro better.
+
+V2.10.0 2023-08-27
+	New 
+		class MPTKInnerLoop (pro)
+		class MPTKTempo
+		class MPTKSignature
+		Measure/beat calculation capabilities
+		MPTKEvent
+			Measure and beat attributes calculated when a MIDI is loaded
+			Processing "System Real Time" MIDI events 
+		MidiFileWriter2 (pro)
+			MPTK_TempoMap as a list of MPTKTempo
+			MPTK_SignMap as a list of MPTKSignature
+			MPTK_CalculateTiming()
+			MPTK_DurationTickToMilli() and MPTK_DurationMilliToTick()
+		MidiLoad
+			MPTK_TempoMap as a list of MPTKTempo (tempo change in the MIDI)
+			MPTK_SignMap as a list of MPTKSignature (signature change in the MIDI)
+		MidiSynth
+			OnBeatEvent (pro)
+	Demo and MVP
+		Demo TestInnerLoop (pro)
+		Metronome with TestMidiFilePlayerScripting (OnQuarter event with pro)
+		Update demo TestMidiKeyboard for sending or receiving "System Real Time" MIDI event (pro)
+		Update demo TestMidiGenerator (simplification) + demo adding Inner Loop with META event (pro)
+	Correction
+		MidiFilePlayer: correct issue last notes not dequeueed at the end of the MIDI
+		SoundFont setup: orrect LoadType change not applied when extracting samples
+		global: correct build error (reference to Unity Editor)
+	Change
+		Midi Editor (pro)
+			Displaying measures in Midi Editor with time signature change
+			Looping based on the new MPTKInnerLoop class
+			Mute/unmute channel
+			Open or close section
+			Add button prev/next measure 
+			Add tooltip
+			Add editable META text and Tempo section 
+		Midi Sequencer
+			Able to disable WaitThreadMidi in the inspector for accurate timing precision
+		MidiFileWriter2 (pro)
+			MPTK_Addxxxx methods now return the MIDI event created. 
+			Split MPTK_ConvertTickToMilli and MPTK_DurationTickToMilli and now based on Tempo_Map
+			Enhancement for MPTK_ImportFromEventsList
+			MPTK_ConvertMilliToTick and MPTK_ConvertTickToMilli based on the Tempo map
+		MidiSynth (pro)
+			OnMidiEvent must return a boolean (change from C# Action to Func) to keep or skip the event.
+			OnMidiEvent must return a boolean. true to keep the event, false to skip it.
+			Check that DSPBufferSize is a multple of 64, display an error in case of not.
+		SetTempo store only microsecondsPerQuarterNote in value, BPM is not stored in Duration
+	Others
+		Maestro prefabs added to the scene as a link to the original prefab.
+
+	Deprecated attributes and methods
+		MPTKEvent.Duration role for event other than note-on is deprecated (please see API documentation)
+		MidiFilePlayer.MPTK_Loop is deprecated. Please investigate MPTK_MidiRestart or MPTK_InnerLoop (Pro) for a better looping accuracy.
+		MPTKEvent.Duration no longer contains tempo in quarter per minute. Please investigate MPTKEvent.MPTK_MPQN2BPM()
+		MidiLoad.MPTK_PulseLenght is deprecated please investigate MPTK_Pulse in place
+		MidiLoad.MPTK_ConvertTickToTime is deprecated and will be removed. Please investigate the tempo map capabilities, see MPTK_TempoMap.
+		MidiLoad.MPTK_ConvertTimeToTick is deprecated and will be removed. Please investigate the tempo map capabilities, see MPTK_TempoMap.
+		MidiLoad.MPTK_BPM2MPQN is deprecated and will be removed. Please investigate MPTKEvent.MPTK_BPM2MPQN.
+		MidiLoad.MPTK_MPQN2BPM is deprecated and will be removed. Please investigate MPTKEvent.MPTK_MPQN2BPM.
+		MidiFileWriter2.MPTK_NumberBeatsMeasure please investigate MPTK_SignMap and MPTK_CalculateTiming()
+		MidiFileWriter2.MPTK_GetMicrosecondsPerQuaterNote is deprecated and will be removed. Please consider MptkEvent.MPTK_BPM2MPQN
+		MidiFileWriter2.MPTK_BPM2MPQN is deprecated and will be removed. Please consider MptkEvent.MPTK_BPM2MPQN
+		MidiFileWriter2.MPTK_MPQN2BPM is deprecated and will be removed. Please consider MptkEvent.MPTK_MPQN2BPM
+
+*** Read the full version change directly in the Asset/MidiPlayer folder 
