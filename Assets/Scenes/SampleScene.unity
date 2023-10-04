@@ -2210,8 +2210,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6547f6e31ed08374eb7cd93604c78711, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  midiNameToPlay: 
-  midiIndexToPlay: 0
+  midiNameToPlay: bach_846
+  midiIndexToPlay: 12
   MPTK_LogLoadEvents: 0
   MPTK_KeepNoteOff: 0
   MPTK_KeepEndTrack: 0
@@ -2408,6 +2408,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   midiFilePlayer: {fileID: 1258448090}
+  midiFileLoader: {fileID: 1813709114}
 --- !u!4 &2045894564
 Transform:
   m_ObjectHideFlags: 0
