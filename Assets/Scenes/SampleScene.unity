@@ -2071,7 +2071,7 @@ GameObject:
   - component: {fileID: 1258448088}
   - component: {fileID: 1258448087}
   m_Layer: 0
-  m_Name: MidiFilePlayerMain
+  m_Name: MidiFilePlayer
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

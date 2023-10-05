@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 
 public class MIDIConvertor : MonoBehaviour
@@ -50,7 +51,7 @@ public class MIDIConvertor : MonoBehaviour
         midiFilePlayer.OnEventNotesMidi.AddListener(NotesToPlay);
 
 
-        ConvertToSongFile();
+        ConvertToSongFile(3);
         //InnerLoopPractise();
     }
 
@@ -85,15 +86,105 @@ public class MIDIConvertor : MonoBehaviour
         midiFilePlayer.MPTK_Play(alreadyLoaded: true);
     }
 
-    public void ConvertToSongFile()
+    public void ConvertToSongFile(int numberOfBarsToConvert)
     {
+        long firstNoteTick;
+        long lastNoteTickEnd;
+        long barLengthInTicks;
 
+        int barCount = 0;
+        int noteCount = 0;
+        int convertedCount = 0;
+
+        long tickDifference = 0;
+
+        // For .song conversion
+        double songNoteDuration = 0;
 
         foreach (List<MPTKEvent> bar in midiEventsAsBars)
         {
 
+            if (convertedCount == numberOfBarsToConvert)
+            {
+                break;
+            }
+
+            firstNoteTick = bar[0].Tick;
+            lastNoteTickEnd = midiEventsAsBars[barCount + 1][0].Tick;
+            barLengthInTicks = lastNoteTickEnd - firstNoteTick;
+            noteCount = bar.Count;
+
+            for (int i = 0; i < noteCount; i++)
+            {
+                MPTKEvent currentNote = bar[i];
+
+                if (i != noteCount - 1)
+                {
+                    tickDifference = TickDifference(bar[i], bar[i + 1]);
+                    songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+                    Debug.Log($"Song File: {currentNote.Value} {songNoteDuration}");
+                }
+                else
+                {
+                    // Edge case: Check we are not at the last bar
+
+                    if (barCount != midiEventsAsBars.Count)
+                    {
+                        // Edge case: Last note should wrap to the first note in the next bar
+
+                        tickDifference = TickDifference(bar[i], midiEventsAsBars[barCount + 1][0]);
+                        songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+                        Debug.Log($"Song File: {currentNote.Value} {songNoteDuration}");
+                    }
+                }
+            }
+            Debug.Log("Next Bar...");
+            convertedCount++;
+            barCount++;
         }
 
+    }
+
+    private long TickDifference(MPTKEvent note1, MPTKEvent note2)
+    {
+        long note1Tick = note1.Tick;
+        long note2Tick = note2.Tick;
+
+        return note2Tick - note1Tick;
+    }
+
+    private double NoteDurationFromTick(long tickDifference, long barLengthInTicks)
+    {
+        long sixteenthNote = barLengthInTicks / 16;
+        long eigthNote = barLengthInTicks / 8;
+        long quarterNote = barLengthInTicks / 4;
+        long halfNote = barLengthInTicks / 2;
+        long wholeNote = barLengthInTicks;
+
+        double songNoteDuration = 0;
+
+        if (tickDifference == sixteenthNote)
+        {
+            songNoteDuration = 0.0625;
+        }
+        else if (tickDifference == eigthNote)
+        {
+            songNoteDuration = 0.125;
+        }
+        else if (tickDifference == quarterNote)
+        {
+            songNoteDuration = 0.25;
+        }
+        else if (tickDifference == halfNote)
+        {
+            songNoteDuration = 0.5;
+        }
+        else if (tickDifference == wholeNote)
+        {
+            songNoteDuration = 1;
+        }
+
+        return songNoteDuration;
     }
 
     public void PlayBar(int barPosition)
