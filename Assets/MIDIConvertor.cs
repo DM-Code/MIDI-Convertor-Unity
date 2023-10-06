@@ -2,10 +2,13 @@ using MidiPlayerTK;
 using MPTK.NAudio.Midi;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.Serialization.Formatters.Binary;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Playables;
 using UnityEngine.UI;
 using UnityEngine.UIElements;
 
@@ -23,6 +26,9 @@ public class MIDIConvertor : MonoBehaviour
     private List<List<MPTKEvent>> midiEventsAsBars = new List<List<MPTKEvent>>();
     private List<MPTKEvent> midiEventBar = new List<MPTKEvent>();
     private bool loopFinished;
+
+    private List<string> songConversion = new List<string>();
+    private List<string> metaConversion = new List<string>();
 
     public class instrumentChannelTrack
     {
@@ -52,6 +58,11 @@ public class MIDIConvertor : MonoBehaviour
 
 
         ConvertToSongFile(3);
+        ConvertToMetaFile();
+
+
+        DisplaySongFile();
+        SaveFile();
         //InnerLoopPractise();
     }
 
@@ -63,27 +74,100 @@ public class MIDIConvertor : MonoBehaviour
         }
     }
 
-    public void InnerLoopPractise()
+
+
+    public void SaveFile()
     {
-        innerLoop.Log = true;
-        innerLoop.OnEventInnerLoop = (MPTKInnerLoop.InnerLoopPhase mode, long tickPlayer, long tickSeek, int count) =>
+        string songsFolderPath = Application.persistentDataPath + "/songs/";
+
+        string songName = midiFilePlayer.MPTK_MidiName;
+        string songFileName = songName + ".song";
+        string songMetaFileName = songFileName + ".meta";
+
+        if (!Directory.Exists(songsFolderPath))
         {
-            Debug.Log($"Inner Loop {mode} - MPTK_TickPlayer:{tickPlayer} --> TickSeek:{tickSeek} Count:{count}/{innerLoop.Max}");
-            if (mode == MPTKInnerLoop.InnerLoopPhase.Exit)
+            Directory.CreateDirectory(songsFolderPath);
+        }
+
+        // Write data to .song file
+
+        string destination = Application.persistentDataPath + "/songs/" + songFileName;
+        List<string> fileData = songConversion;
+
+        using (StreamWriter writer = new StreamWriter(destination))
+        {
+            foreach (string line in fileData)
             {
-                loopFinished = true;
+                writer.WriteLine(line); // Write each string as a line in the text file
             }
-            return true;
+
+            Debug.Log($"File: '{songFileName}' has been saved in {destination}");
+
+        }
+
+        // Write data to .song.meta file
+
+        destination = Application.persistentDataPath + "/songs/" + songMetaFileName;
+        List<string> metaData = metaConversion;
+
+        using (StreamWriter writer = new StreamWriter(destination))
+        {
+            foreach (string line in metaData)
+            {
+                writer.WriteLine(line); // Write each string as a line in the text file
+            }
+
+            Debug.Log($"File: '{songFileName}' has been saved in {destination}");
+
+        }
 
 
-        };
-        //1 - 1801
-        innerLoop.Enabled = true;
-        innerLoop.Max = 1;
-        innerLoop.Start = 1;
-        innerLoop.End = 1901;
+    }
 
-        midiFilePlayer.MPTK_Play(alreadyLoaded: true);
+    private void DisplaySongFile()
+    {
+        if (songConversion.Count >= 1)
+        {
+            Debug.Log("Displaying .song data...");
+            foreach (string value in songConversion)
+            {
+                Debug.Log(value);
+            }
+        }
+    }
+
+    private void DisplayMetaFile()
+    {
+        if (metaConversion.Count >= 1)
+        {
+            Debug.Log("Displaying .meta data...");
+            foreach (string value in metaConversion)
+            {
+                Debug.Log(value);
+            }
+        }
+    }
+
+    private void ConvertToMetaFile()
+    {
+        if (midiFilePlayer != null)
+        {
+            string artistName = "";
+            int songUnlockPosition = 0;
+            string startingPoints = "0,0";
+            double bpm = midiFilePlayer.MPTK_Tempo;
+            string fileMetaData = midiFilePlayer.MPTK_TextEvent;
+
+            // First text event is USUALLY the artist name
+            artistName = fileMetaData.Split('\n')[0];
+
+
+            metaConversion.Add(artistName);
+            metaConversion.Add(songUnlockPosition.ToString());
+            metaConversion.Add(startingPoints);
+            metaConversion.Add($"easy R {bpm} 1");
+            metaConversion.Add($"medium R {bpm} 2");
+        }
     }
 
     public void ConvertToSongFile(int numberOfBarsToConvert)
@@ -122,7 +206,6 @@ public class MIDIConvertor : MonoBehaviour
                 {
                     tickDifference = TickDifference(bar[i], bar[i + 1]);
                     songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-                    Debug.Log($"Song File: {currentNote.Value} {songNoteDuration}");
                 }
                 else
                 {
@@ -134,15 +217,14 @@ public class MIDIConvertor : MonoBehaviour
 
                         tickDifference = TickDifference(bar[i], midiEventsAsBars[barCount + 1][0]);
                         songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-                        Debug.Log($"Song File: {currentNote.Value} {songNoteDuration}");
                     }
                 }
+                songConversion.Add($"{currentNote.Value} {songNoteDuration}");
             }
-            Debug.Log("Next Bar...");
+            //Debug.Log("Next Bar...");
             convertedCount++;
             barCount++;
         }
-
     }
 
     private long TickDifference(MPTKEvent note1, MPTKEvent note2)
