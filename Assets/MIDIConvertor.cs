@@ -84,6 +84,9 @@ public class MIDIConvertor : MonoBehaviour
         string songFileName = songName + ".song";
         string songMetaFileName = songName + ".meta";
 
+        // Used to prevent a new line being written at the end of the file
+        int counter = 0;
+
         if (!Directory.Exists(songsFolderPath))
         {
             Directory.CreateDirectory(songsFolderPath);
@@ -93,14 +96,23 @@ public class MIDIConvertor : MonoBehaviour
 
         string destination = Application.persistentDataPath + "/songs/" + songFileName;
         List<string> fileData = songConversion;
+        int songLineCount = fileData.Count;
 
         using (StreamWriter writer = new StreamWriter(destination))
         {
             foreach (string line in fileData)
             {
-                writer.WriteLine(line); // Write each string as a line in the text file
-            }
+                counter++;
 
+                if (counter != songLineCount)
+                {
+                    writer.WriteLine(line);
+                }
+                else
+                {
+                    writer.Write(line);
+                }
+            }
             Debug.Log($"File: '{songFileName}' has been saved in {destination}");
 
         }
@@ -109,12 +121,23 @@ public class MIDIConvertor : MonoBehaviour
 
         destination = Application.persistentDataPath + "/songs/" + songMetaFileName;
         List<string> metaData = metaConversion;
+        int metaLineCount = metaData.Count;
+        counter = 0;
 
         using (StreamWriter writer = new StreamWriter(destination))
         {
             foreach (string line in metaData)
             {
-                writer.WriteLine(line); // Write each string as a line in the text file
+                counter++;
+
+                if (counter != songLineCount)
+                {
+                    writer.WriteLine(line);
+                }
+                else
+                {
+                    writer.Write(line);
+                }
             }
 
             Debug.Log($"File: '{songFileName}' has been saved in {destination}");
@@ -153,8 +176,8 @@ public class MIDIConvertor : MonoBehaviour
         if (midiFilePlayer != null)
         {
             string artistName = "";
-            int songUnlockPosition = 0;
-            string startingPoints = "0,0";
+            int stageLevel = 0;
+            string startingScores = "0, 4800";
             double bpm = midiFilePlayer.MPTK_Tempo;
             string fileMetaData = midiFilePlayer.MPTK_TextEvent;
 
@@ -163,8 +186,8 @@ public class MIDIConvertor : MonoBehaviour
 
 
             metaConversion.Add(artistName);
-            metaConversion.Add(songUnlockPosition.ToString());
-            metaConversion.Add(startingPoints);
+            metaConversion.Add(stageLevel.ToString());
+            metaConversion.Add(startingScores);
             metaConversion.Add($"easy R {bpm} 1");
             metaConversion.Add($"medium R {bpm} 2");
         }
