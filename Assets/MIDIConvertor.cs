@@ -82,7 +82,7 @@ public class MIDIConvertor : MonoBehaviour
 
         string songName = midiFilePlayer.MPTK_MidiName;
         string songFileName = songName + ".song";
-        string songMetaFileName = songFileName + ".meta";
+        string songMetaFileName = songName + ".meta";
 
         if (!Directory.Exists(songsFolderPath))
         {
