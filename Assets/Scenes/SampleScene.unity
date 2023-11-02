@@ -2504,10 +2504,10 @@ MonoBehaviour:
   MPTK_ModeSpatializer: 0
   MPTK_MaxSpatialSynth: 0
   MPTK_SpatialSynthEnabled: 0
-  midiNameToPlay: bach_846
+  midiNameToPlay: Animal Crossing
   MPTK_StartPlayAtFirstNote: 0
   MPTK_ModeStopVoice: 0
-  midiIndexToPlay: 12
+  midiIndexToPlay: 3
   speed: 1
   durationEditorModeOnly: 
   playTimeEditorModeOnly: 

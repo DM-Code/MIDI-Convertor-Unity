@@ -44,6 +44,11 @@ public class MIDIConvertor : MonoBehaviour
     void Start()
     {
 
+        if (midiFilePlayer.MPTK_Load() != null)
+        {
+            allMidiEvents = midiFilePlayer.MPTK_ReadMidiEvents();
+        }
+
         // PreprocessMIDI does the following:
         // 1) Processes the midi as 'bars' for the program
         // 2) Stores the instrument, track and channel instances to seperate each track
@@ -523,19 +528,17 @@ public class MIDIConvertor : MonoBehaviour
     public void PreprocessMIDI()
     {
 
-        // Step 1: Parse through and add a list of MIDI information setters
+        // STEP 1: Parse through and add a list of MIDI information setters
         if (midiFilePlayer.MPTK_Load() != null)
         {
-            // 16 Channels of Data
+            // Store data on all 16 channels available
             List<instrumentChannelTrack> midiSetterEvents = new List<instrumentChannelTrack>(16);
 
-            // Create 16 empty instrumentChannelTracks
             for (int i = 0; i < 16; i++)
             {
                 midiSetterEvents.Add(new instrumentChannelTrack { instrumentName = "", sequenceName = "", channel = -1, track = i });
             }
 
-            allMidiEvents = midiFilePlayer.MPTK_ReadMidiEvents();
 
             foreach (MPTKEvent midiEvent in allMidiEvents)
             {
@@ -554,29 +557,32 @@ public class MIDIConvertor : MonoBehaviour
                     midiSetterEvents[trackIndex].instrumentName = instrumentName;
                     midiSetterEvents[trackIndex].channel = midiEvent.Channel;
                 }
-                else if (midiEvent.Command == MPTKCommand.NoteOn || midiEvent.Command == MPTKCommand.NoteOff)
-                {
-                    break;
-                }
             }
 
-            Debug.Log("We have hit a note on/off");
-            Debug.Log("Displaying stored info");
+            Debug.Log("Active Tracks...");
 
             List<instrumentChannelTrack> activeTracks = new List<instrumentChannelTrack>();
 
             foreach (instrumentChannelTrack ict in midiSetterEvents)
             {
-                if (ict.sequenceName != "" && ict.instrumentName != "")
+                if (ict.instrumentName != "")
                 {
-                    activeTracks.Add(ict);
-                }
+                    if (ict.sequenceName != "")
+                    {
+                        activeTracks.Add(ict);
+                    }
+                    else
+                    {
+                        ict.sequenceName = "Track " + ict.track;
+                        activeTracks.Add(ict);
+                    }
 
+                }
             }
 
             foreach (instrumentChannelTrack ict in activeTracks)
             {
-                Debug.Log($"Sequence: [{ict.sequenceName}] | Instrument [{ict.instrumentName}] | Track [{ict.track}] ");
+                Debug.Log($"Track: {ict.track} | Sequence: {ict.sequenceName} | Instrument: {ict.instrumentName}");
             }
 
         }
@@ -585,8 +591,6 @@ public class MIDIConvertor : MonoBehaviour
         int currentMeasure = 1;
         if (midiFilePlayer.MPTK_Load() != null)
         {
-            allMidiEvents = midiFilePlayer.MPTK_ReadMidiEvents();
-
             foreach (MPTKEvent midiEvent in allMidiEvents)
             {
                 if (midiEvent.Command == MPTKCommand.NoteOn)
