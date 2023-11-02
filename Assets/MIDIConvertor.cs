@@ -1,17 +1,8 @@
 using MidiPlayerTK;
-using MPTK.NAudio.Midi;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Runtime.Serialization.Formatters.Binary;
-using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.Playables;
-using UnityEngine.UI;
-using UnityEngine.UIElements;
 
 
 public class MIDIConvertor : MonoBehaviour
@@ -24,10 +15,11 @@ public class MIDIConvertor : MonoBehaviour
 
     private int barNoteCount;
     private bool isBarAboutToChange;
+
     // All Midi Events
     private List<MPTKEvent> allMidiEvents = new List<MPTKEvent>();
     private List<List<MPTKEvent>> midiEventsAsBars = new List<List<MPTKEvent>>();
-    private List<MPTKEvent> midiEventBar = new List<MPTKEvent>();
+    private List<MPTKEvent> midiEventSingleBar = new List<MPTKEvent>();
 
     private List<MPTKEvent> chordEvent = new List<MPTKEvent>();
     private List<List<MPTKEvent>> chordEvents = new List<List<MPTKEvent>>();
@@ -37,10 +29,13 @@ public class MIDIConvertor : MonoBehaviour
     private List<string> songConversion = new List<string>();
     private List<string> metaConversion = new List<string>();
 
+    private HashSet<instrumentChannelTrack> instrumentChannelTrackSet = new HashSet<instrumentChannelTrack>();
+
 
     public class instrumentChannelTrack
     {
-        public string instrument { get; set; }
+        public string instrumentName { get; set; }
+        public string sequenceName { get; set; }
         public int channel { get; set; }
         public long track { get; set; }
     }
@@ -49,11 +44,11 @@ public class MIDIConvertor : MonoBehaviour
     void Start()
     {
 
-        // Initial required functions to preprocess MIDI
-        PreprocessMIDIAsBars();
+        // PreprocessMIDI does the following:
+        // 1) Processes the midi as 'bars' for the program
+        // 2) Stores the instrument, track and channel instances to seperate each track
+        PreprocessMIDI();
         innerLoop = midiFilePlayer.MPTK_InnerLoop;
-
-
 
         midiFilePlayer.MPTK_PlayOnStart = false;
         isBarAboutToChange = false;
@@ -506,9 +501,87 @@ public class MIDIConvertor : MonoBehaviour
             }
         }
     }
+    //public void PreProcessStep1()
+    //{
+    //    List<MPTKEvent> infoEvents;
+    //    // Step 1: Check if MIDI File has SequenceTrackName Meta (Put in by the creator to name tracks)
+    //    if (midiFilePlayer.MPTK_Load() != null)
+    //    {
+    //        foreach (MPTKEvent midiEvent in allMidiEvents)
+    //        {
 
-    public void PreprocessMIDIAsBars()
+    //            if (midiEvent.Command == MPTKCommand.NoteOn || midiEvent.Command == MPTKCommand.NoteOff)
+    //            {
+    //                // Exit For Each
+    //                break;
+    //            }
+    //        }
+
+    //        Debug.Log("We have excited");
+    //    }
+    //}
+    public void PreprocessMIDI()
     {
+
+        // Step 1: Parse through and add a list of MIDI information setters
+        if (midiFilePlayer.MPTK_Load() != null)
+        {
+            // 16 Channels of Data
+            List<instrumentChannelTrack> midiSetterEvents = new List<instrumentChannelTrack>(16);
+
+            // Create 16 empty instrumentChannelTracks
+            for (int i = 0; i < 16; i++)
+            {
+                midiSetterEvents.Add(new instrumentChannelTrack { instrumentName = "", sequenceName = "", channel = -1, track = i });
+            }
+
+            allMidiEvents = midiFilePlayer.MPTK_ReadMidiEvents();
+
+            foreach (MPTKEvent midiEvent in allMidiEvents)
+            {
+                int trackIndex = (int)midiEvent.Track;
+
+                // Store information of interest
+                if (midiEvent.Meta == MPTKMeta.SequenceTrackName)
+                {
+                    string sequenceName = midiEvent.Info;
+                    midiSetterEvents[trackIndex].sequenceName = sequenceName;
+                    midiSetterEvents[trackIndex].channel = midiEvent.Channel;
+                }
+                else if (midiEvent.Command == MPTKCommand.PatchChange)
+                {
+                    string instrumentName = GetPatchName(midiEvent.Value);
+                    midiSetterEvents[trackIndex].instrumentName = instrumentName;
+                    midiSetterEvents[trackIndex].channel = midiEvent.Channel;
+                }
+                else if (midiEvent.Command == MPTKCommand.NoteOn || midiEvent.Command == MPTKCommand.NoteOff)
+                {
+                    break;
+                }
+            }
+
+            Debug.Log("We have hit a note on/off");
+            Debug.Log("Displaying stored info");
+
+            List<instrumentChannelTrack> activeTracks = new List<instrumentChannelTrack>();
+
+            foreach (instrumentChannelTrack ict in midiSetterEvents)
+            {
+                if (ict.sequenceName != "" && ict.instrumentName != "")
+                {
+                    activeTracks.Add(ict);
+                }
+
+            }
+
+            foreach (instrumentChannelTrack ict in activeTracks)
+            {
+                Debug.Log($"Sequence: [{ict.sequenceName}] | Instrument [{ict.instrumentName}] | Track [{ict.track}] ");
+            }
+
+        }
+
+
         int currentMeasure = 1;
         if (midiFilePlayer.MPTK_Load() != null)
         {
@@ -521,14 +594,14 @@ public class MIDIConvertor : MonoBehaviour
                     if (currentMeasure != midiEvent.Measure)
                     {
                         // Send off batch of notes from the bar just passed to the main list
-                        midiEventsAsBars.Add(midiEventBar.ToList());
-                        midiEventBar.Clear();
+                        midiEventsAsBars.Add(midiEventSingleBar.ToList());
+                        midiEventSingleBar.Clear();
 
                         currentMeasure = midiEvent.Measure;
 
                     }
 
-                    midiEventBar.Add(midiEvent);
+                    midiEventSingleBar.Add(midiEvent);
                 }
 
 
@@ -537,8 +610,8 @@ public class MIDIConvertor : MonoBehaviour
             // Do last bar processing
 
             // Capture last bar information 
-            midiEventsAsBars.Add(midiEventBar.ToList());
-            midiEventBar.Clear();
+            midiEventsAsBars.Add(midiEventSingleBar.ToList());
+            midiEventSingleBar.Clear();
 
 
 
@@ -547,6 +620,40 @@ public class MIDIConvertor : MonoBehaviour
         Debug.Log($"Total bar count: {midiEventsAsBars.Count}");
 
     }
+
+    // Pulled from MPTK Package
+
+    /// <summary>@brief
+    /// Gets the default MIDI instrument names
+    /// </summary>
+    public static string GetPatchName(int patchNumber)
+    {
+        if (patchNumber < patchNames.Length)
+            return patchNames[patchNumber];
+        else
+            return "unknown";
+    }
+
+    // TODO: localize
+    private static readonly string[] patchNames = new string[]
+    {
+            "Acoustic Grand","Bright Acoustic","Electric Grand","Honky-Tonk","Electric Piano 1","Electric Piano 2","Harpsichord","Clav",
+            "Celesta","Glockenspiel","Music Box","Vibraphone","Marimba","Xylophone","Tubular Bells","Dulcimer",
+            "Drawbar Organ","Percussive Organ","Rock Organ","Church Organ","Reed Organ","Accoridan","Harmonica","Tango Accordian",
+            "Acoustic Guitar(nylon)","Acoustic Guitar(steel)","Electric Guitar(jazz)","Electric Guitar(clean)","Electric Guitar(muted)","Overdriven Guitar","Distortion Guitar","Guitar Harmonics",
+            "Acoustic Bass","Electric Bass(finger)","Electric Bass(pick)","Fretless Bass","Slap Bass 1","Slap Bass 2","Synth Bass 1","Synth Bass 2",
+            "Violin","Viola","Cello","Contrabass","Tremolo Strings","Pizzicato Strings","Orchestral Strings","Timpani",
+            "String Ensemble 1","String Ensemble 2","SynthStrings 1","SynthStrings 2","Choir Aahs","Voice Oohs","Synth Voice","Orchestra Hit",
+            "Trumpet","Trombone","Tuba","Muted Trumpet","French Horn","Brass Section","SynthBrass 1","SynthBrass 2",
+            "Soprano Sax","Alto Sax","Tenor Sax","Baritone Sax","Oboe","English Horn","Bassoon","Clarinet",
+            "Piccolo","Flute","Recorder","Pan Flute","Blown Bottle","Skakuhachi","Whistle","Ocarina",
+            "Lead 1 (square)","Lead 2 (sawtooth)","Lead 3 (calliope)","Lead 4 (chiff)","Lead 5 (charang)","Lead 6 (voice)","Lead 7 (fifths)","Lead 8 (bass+lead)",
+            "Pad 1 (new age)","Pad 2 (warm)","Pad 3 (polysynth)","Pad 4 (choir)","Pad 5 (bowed)","Pad 6 (metallic)","Pad 7 (halo)","Pad 8 (sweep)",
+            "FX 1 (rain)","FX 2 (soundtrack)","FX 3 (crystal)","FX 4 (atmosphere)","FX 5 (brightness)","FX 6 (goblins)","FX 7 (echoes)","FX 8 (sci-fi)",
+            "Sitar","Banjo","Shamisen","Koto","Kalimba","Bagpipe","Fiddle","Shanai",
+            "Tinkle Bell","Agogo","Steel Drums","Woodblock","Taiko Drum","Melodic Tom","Synth Drum","Reverse Cymbal",
+            "Guitar Fret Noise","Breath Noise","Seashore","Bird Tweet","Telephone Ring","Helicopter","Applause","Gunshot"
+    };
 
     public void NotesToPlaySynth(List<MPTKEvent> midiEvents)
     {
