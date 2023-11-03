@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEngine;
 
 
+
 public class MIDIConvertor : MonoBehaviour
 {
     public MidiFilePlayer midiFilePlayer;
@@ -12,6 +13,10 @@ public class MIDIConvertor : MonoBehaviour
     public MidiStreamPlayer midiStreamPlayer;
 
     private MPTKInnerLoop innerLoop;
+
+    // Prefabs
+    public GameObject checklistPrefab;
+    public GameObject checklistParent;
 
     private bool isBarAboutToChange;
 
@@ -40,6 +45,9 @@ public class MIDIConvertor : MonoBehaviour
     void Start()
     {
 
+
+
+
         midiFilePlayer.MPTK_PlayOnStart = false;
         isBarAboutToChange = false;
         // TODO: Remove hardcode
@@ -51,10 +59,8 @@ public class MIDIConvertor : MonoBehaviour
             allMidiEvents = midiFilePlayer.MPTK_ReadMidiEvents();
         }
 
-        // PreprocessMIDI does the following:
-        // 1) Processes the midi as 'bars' for the program to use
-        // 2) Stores the instrument, sequence name, track and channel for each unique MIDI 
-        PreprocessMIDI();
+        // Stores the instrument, sequence name, track and channel for each unique MIDI 
+        ProcessImportantMIDIData();
 
 
 
@@ -197,11 +203,91 @@ public class MIDIConvertor : MonoBehaviour
         }
     }
 
+
+    private List<int> GetSelectedTracks()
+    {
+        List<int> selectedTracks = new List<int>();
+        int index = 0;
+        foreach (Transform child in checklistParent.transform)
+        {
+            if (child.GetComponent<UnityEngine.UI.Toggle>().isOn)
+            {
+                // Add to selected track
+                selectedTracks.Add(index);
+            }
+
+            index++;
+        }
+
+        foreach (int value in selectedTracks)
+        {
+            Debug.Log("Index: " + value);
+        }
+
+        return selectedTracks;
+    }
+    // 1) Processes the midi as 'bars' for the program to use
+    public void ProcessMIDIAsBars()
+    {
+        // Holds all selected tracks to be converted into .song file format
+        List<instrumentChannelTrack> selectedTracks = new List<instrumentChannelTrack>();
+
+        // Holds the track index of the selected tracks, to link with the UI
+        List<int> selectedTracksIndex = new List<int>();
+
+        // TODO: Load up track options on the UI and let the user checkbox which tracks they want
+
+        // Get selected track index
+
+        selectedTracksIndex = GetSelectedTracks();
+
+        // Parse through and set relevant selected tracks as bars to be analysed by the program
+        if (midiFilePlayer.MPTK_Load() != null)
+        {
+            int currentMeasure = 1;
+
+            foreach (MPTKEvent midiEvent in allMidiEvents)
+            {
+                if (midiEvent.Command == MPTKCommand.NoteOn)
+                {
+                    // Checks if the MidiEvent's track is one of the selected tracks
+                    if (selectedTracksIndex.Contains((int)midiEvent.Track))
+                    {
+                        if (currentMeasure != midiEvent.Measure)
+                        {
+                            // Send off batch of notes from the bar just passed to the main list
+                            midiEventsAsBars.Add(midiEventSingleBar.ToList());
+                            midiEventSingleBar.Clear();
+
+                            currentMeasure = midiEvent.Measure;
+                        }
+                        midiEventSingleBar.Add(midiEvent);
+                    }
+                }
+            }
+
+            // Capture last bar information (last bar processing)
+            midiEventsAsBars.Add(midiEventSingleBar.ToList());
+            midiEventSingleBar.Clear();
+        }
+
+        Debug.Log($"Total bar count: {midiEventsAsBars.Count}");
+
+        Debug.Log("Selected Tracks...");
+
+        foreach (instrumentChannelTrack ict in selectedTracks)
+        {
+            Debug.Log($"Track: {ict.trackIndex} | Sequence: {ict.sequenceName} | Instrument: {ict.instrumentName}");
+        }
+    }
+
     // Hard coded on the Inspector for now,
     // TODO: Grab a number from UI
     public void ConvertToSongFile(int numberOfBarsToConvert)
     {
 
+        // Preprocessing which takes into account selected sequences to convert
+        ProcessMIDIAsBars();
 
         long firstNoteInBarTick;
         long lastNoteInBarTickEnd;
@@ -218,9 +304,6 @@ public class MIDIConvertor : MonoBehaviour
 
         // For .song conversion
         double songNoteDuration = 0;
-
-
-
 
         foreach (List<MPTKEvent> bar in midiEventsAsBars)
         {
@@ -505,23 +588,10 @@ public class MIDIConvertor : MonoBehaviour
         }
     }
 
-    public void PreprocessMIDI()
+    public void ProcessImportantMIDIData()
     {
-
         // Holds all active tracks in the MIDI file
         List<instrumentChannelTrack> activeTracks = new List<instrumentChannelTrack>();
-
-        // Holds all selected tracks to be converted into .song file format
-        List<instrumentChannelTrack> selectedTracks = new List<instrumentChannelTrack>();
-
-        // Holds the track index of the selected tracks, to link with the UI
-        List<int> selectedTracksIndex = new List<int>();
-
-        // TODO: Load up track options on the UI and let the user checkbox which tracks they want
-
-        // TEST CASE as interim for above UI linking TODO
-        selectedTracksIndex.Add(1);
-        selectedTracksIndex.Add(2);
 
         // STEP 1: Parse through and add a list of MIDI information setters
         if (midiFilePlayer.MPTK_Load() != null)
@@ -553,31 +623,35 @@ public class MIDIConvertor : MonoBehaviour
                 }
             }
 
+            int activeTrackCount = 0;
+
             // Set active tracks
             foreach (instrumentChannelTrack ict in midiSetterEvents)
             {
+                //Debug.Log("Stage 1");
                 if (ict.instrumentName != "")
                 {
+                    //Debug.Log("Stage 2");
                     if (ict.sequenceName != "")
                     {
+                        //Debug.Log("Stage 3");
                         activeTracks.Add(ict);
+                        activeTrackCount++;
                     }
                     else
                     {
                         ict.sequenceName = "Track " + ict.trackIndex;
                         activeTracks.Add(ict);
-                    }
+                        activeTrackCount++;
 
+                    }
                 }
             }
 
-            // Set selected tracks 
-            foreach (instrumentChannelTrack ict in activeTracks)
+            if (activeTrackCount == 0)
             {
-                if (selectedTracksIndex.Contains((int)ict.trackIndex))
-                {
-                    selectedTracks.Add(ict);
-                }
+                // Edge case where no information has been given
+                // TODO: Bach - Fugue 
             }
 
             Debug.Log("Active Tracks...");
@@ -587,47 +661,34 @@ public class MIDIConvertor : MonoBehaviour
                 Debug.Log($"Track: {ict.trackIndex} | Sequence: {ict.sequenceName} | Instrument: {ict.instrumentName}");
             }
 
+            // Creating checklists as tracks on UI     
 
-            Debug.Log("Selected Tracks...");
+            GameObject referenceObject = GameObject.Find("Stop");
 
-            foreach (instrumentChannelTrack ict in selectedTracks)
+            // Hardcoding start coordinates for now
+            Vector3 initCoord = referenceObject.transform.localPosition;
+            int yJump = -50;
+
+            // Set the first location
+            initCoord.y = initCoord.y + (yJump * 2);
+
+            for (int i = 0; i < activeTracks.Count; i++)
             {
-                Debug.Log($"Track: {ict.trackIndex} | Sequence: {ict.sequenceName} | Instrument: {ict.instrumentName}");
-            }
-        }
+                GameObject checklistInstance = Instantiate(checklistPrefab, new Vector3(0, 0, 0), Quaternion.identity);
 
-        // STEP 2: Parse through and set relevant selected tracks as bars to be analysed by the program
-        // TODO: Make a bars class that can be used?
-        if (midiFilePlayer.MPTK_Load() != null)
-        {
-            int currentMeasure = 1;
+                checklistInstance.transform.SetParent(checklistParent.transform);
+                checklistInstance.transform.localPosition = new Vector3(initCoord.x, initCoord.y + (yJump * i), initCoord.y);
 
-            foreach (MPTKEvent midiEvent in allMidiEvents)
-            {
-                if (midiEvent.Command == MPTKCommand.NoteOn)
-                {
-                    // Checks if the MidiEvent's track is one of the selected tracks
-                    if (selectedTracksIndex.Contains((int)midiEvent.Track))
-                    {
-                        if (currentMeasure != midiEvent.Measure)
-                        {
-                            // Send off batch of notes from the bar just passed to the main list
-                            midiEventsAsBars.Add(midiEventSingleBar.ToList());
-                            midiEventSingleBar.Clear();
+                instrumentChannelTrack currentTrack = activeTracks[i];
+                string sequenceName = currentTrack.sequenceName;
+                string checklistText = ($"{sequenceName} ({currentTrack.instrumentName})");
 
-                            currentMeasure = midiEvent.Measure;
-                        }
-                        midiEventSingleBar.Add(midiEvent);
-                    }
-                }
+                checklistInstance.name = sequenceName;
+                Transform label = checklistInstance.transform.Find("Label");
+                label.GetComponent<UnityEngine.UI.Text>().text = checklistText;
             }
 
-            // Capture last bar information (last bar processing)
-            midiEventsAsBars.Add(midiEventSingleBar.ToList());
-            midiEventSingleBar.Clear();
         }
-
-        Debug.Log($"Total bar count: {midiEventsAsBars.Count}");
 
     }
 
@@ -700,6 +761,8 @@ public class MIDIConvertor : MonoBehaviour
 
     public void PlayMidi()
     {
+        // Check if there are any muted channels
+
         midiFilePlayer.MPTK_Play();
     }
 
