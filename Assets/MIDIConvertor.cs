@@ -28,6 +28,8 @@ public class MIDIConvertor : MonoBehaviour
     private List<MPTKEvent> chordEvent = new List<MPTKEvent>();
     private List<List<MPTKEvent>> chordEvents = new List<List<MPTKEvent>>();
 
+    private List<instrumentChannelTrack> activeTracks;
+
     private bool loopFinished;
 
     private List<string> songConversion = new List<string>();
@@ -207,16 +209,18 @@ public class MIDIConvertor : MonoBehaviour
     private List<int> GetSelectedTracks()
     {
         List<int> selectedTracks = new List<int>();
-        int index = 0;
         foreach (Transform child in checklistParent.transform)
         {
             if (child.GetComponent<UnityEngine.UI.Toggle>().isOn)
             {
-                // Add to selected track
-                selectedTracks.Add(index);
-            }
+                string value = child.transform.Find("Label").GetComponent<UnityEngine.UI.Text>().text;
 
-            index++;
+                // Converts char to integer: -'0'
+                int desiredTrackIndex = value.Substring(value.Length - 3)[1] - '0';
+
+                selectedTracks.Add((int)desiredTrackIndex);
+
+            }
         }
 
         foreach (int value in selectedTracks)
@@ -591,7 +595,7 @@ public class MIDIConvertor : MonoBehaviour
     public void ProcessImportantMIDIData()
     {
         // Holds all active tracks in the MIDI file
-        List<instrumentChannelTrack> activeTracks = new List<instrumentChannelTrack>();
+        activeTracks = new List<instrumentChannelTrack>();
 
         // STEP 1: Parse through and add a list of MIDI information setters
         if (midiFilePlayer.MPTK_Load() != null)
@@ -652,6 +656,7 @@ public class MIDIConvertor : MonoBehaviour
             {
                 // Edge case where no information has been given
                 // TODO: Bach - Fugue 
+                Debug.Log("Is this Bach - Fugue?");
             }
 
             Debug.Log("Active Tracks...");
@@ -661,7 +666,7 @@ public class MIDIConvertor : MonoBehaviour
                 Debug.Log($"Track: {ict.trackIndex} | Sequence: {ict.sequenceName} | Instrument: {ict.instrumentName}");
             }
 
-            // Creating checklists as tracks on UI     
+            // SET: Tracks on UI as a checklist
 
             GameObject referenceObject = GameObject.Find("Stop");
 
@@ -681,7 +686,9 @@ public class MIDIConvertor : MonoBehaviour
 
                 instrumentChannelTrack currentTrack = activeTracks[i];
                 string sequenceName = currentTrack.sequenceName;
-                string checklistText = ($"{sequenceName} ({currentTrack.instrumentName})");
+                string instrumentName = currentTrack.instrumentName;
+                string trackIndex = currentTrack.trackIndex.ToString();
+                string checklistText = ($"{sequenceName} ({currentTrack.instrumentName}) [{trackIndex}]");
 
                 checklistInstance.name = sequenceName;
                 Transform label = checklistInstance.transform.Find("Label");
