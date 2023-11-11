@@ -14,13 +14,14 @@ public class MIDIConvertor : MonoBehaviour
 
     private MPTKInnerLoop innerLoop;
 
-    // Prefabs
+    // Prefabs for UI
     public GameObject checklistPrefab;
     public GameObject checklistParent;
 
-    private bool isBarAboutToChange;
+    private bool isBarAboutToChange = false;
 
     // All Midi Events
+    // midiEventsAsBars: Holds the MPTK Events from the selected tracks, each bar of the song (List<MPTKEvent) is stored here
     private List<MPTKEvent> allMidiEvents = new List<MPTKEvent>();
     private List<List<MPTKEvent>> midiEventsAsBars = new List<List<MPTKEvent>>();
     private List<MPTKEvent> midiEventSingleBar = new List<MPTKEvent>();
@@ -29,6 +30,8 @@ public class MIDIConvertor : MonoBehaviour
     private List<List<MPTKEvent>> chordEvents = new List<List<MPTKEvent>>();
 
     private List<instrumentChannelTrack> activeTracks;
+
+    List<long> firstNoteTickIndexes;
 
     private bool loopFinished;
 
@@ -46,38 +49,27 @@ public class MIDIConvertor : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-
-
-
-
+        Debug.Log("MIDIConvertor (start function)");
         midiFilePlayer.MPTK_PlayOnStart = false;
-        isBarAboutToChange = false;
-        // TODO: Remove hardcode
-        Debug.Log($"Denomenator Time Sig: 4");
-
 
         if (midiFilePlayer.MPTK_Load() != null)
         {
             allMidiEvents = midiFilePlayer.MPTK_ReadMidiEvents();
+
+            // Stores the instrument, sequence name, track and channel for each unique MIDI 
+            ProcessImportantMIDIData();
+
+            // OnEventNotesMidi: Triggered when a group of MIDI events are read by the sequence and ready to play on the synthesizer
+            // [A list of MPTKEvent are passed in the paremeter]
+            midiFilePlayer.OnEventNotesMidi.AddListener(NotesToPlay);
+
+            //ConvertToMetaFile();
+            //SaveFile();
+
+
+            //DisplaySongFile();
+
         }
-
-        // Stores the instrument, sequence name, track and channel for each unique MIDI 
-        ProcessImportantMIDIData();
-
-
-
-        // OnEventNotesMidi: Triggered when a group of MIDI events are read by the sequence and ready to play on the synthesizer
-        // [A list of MPTKEvent are passed in the paremeter]
-        midiFilePlayer.OnEventNotesMidi.AddListener(NotesToPlay);
-
-
-        //ConvertToSongFile(-1);
-        ConvertToMetaFile();
-        SaveFile();
-
-        //innerLoop = midiFilePlayer.MPTK_InnerLoop;
-        //DisplaySongFile();
-        //InnerLoopPractise();
     }
 
     public void Update()
@@ -215,7 +207,7 @@ public class MIDIConvertor : MonoBehaviour
             {
                 string value = child.transform.Find("Label").GetComponent<UnityEngine.UI.Text>().text;
 
-                // Converts char to integer: -'0'
+                // Converts char to integer, grabs last 3 characters from the selected track UI
                 int desiredTrackIndex = value.Substring(value.Length - 3)[1] - '0';
 
                 selectedTracks.Add((int)desiredTrackIndex);
@@ -230,6 +222,7 @@ public class MIDIConvertor : MonoBehaviour
 
         return selectedTracks;
     }
+
     // 1) Processes the midi as 'bars' for the program to use
     public void ProcessMIDIAsBars()
     {
@@ -257,14 +250,15 @@ public class MIDIConvertor : MonoBehaviour
                     // Checks if the MidiEvent's track is one of the selected tracks
                     if (selectedTracksIndex.Contains((int)midiEvent.Track))
                     {
+                        // Enters when we are at a new bar, batch of notes stored from the previous bar are stored
                         if (currentMeasure != midiEvent.Measure)
                         {
-                            // Send off batch of notes from the bar just passed to the main list
                             midiEventsAsBars.Add(midiEventSingleBar.ToList());
                             midiEventSingleBar.Clear();
 
                             currentMeasure = midiEvent.Measure;
                         }
+
                         midiEventSingleBar.Add(midiEvent);
                     }
                 }
@@ -285,6 +279,35 @@ public class MIDIConvertor : MonoBehaviour
         }
     }
 
+    public void StoreFirstNoteTickIndexes()
+    {
+        bool isFirstNote = true;
+        firstNoteTickIndexes = new List<long>();
+
+        int currentMeasure = 1;
+
+        foreach (MPTKEvent midiEvent in allMidiEvents)
+        {
+            if (midiEvent.Command == MPTKCommand.NoteOn)
+            {
+                // We are in a new bar
+                if (currentMeasure != midiEvent.Measure)
+                {
+                    isFirstNote = true;
+                    currentMeasure = midiEvent.Measure;
+                }
+
+                if (isFirstNote)
+                {
+                    firstNoteTickIndexes.Add(midiEvent.Tick);
+                    Debug.Log("First Note Tick Index: " + midiEvent.Tick);
+                    isFirstNote = false;
+                }
+            }
+        }
+
+    }
+
     // Hard coded on the Inspector for now,
     // TODO: Grab a number from UI
     public void ConvertToSongFile(int numberOfBarsToConvert)
@@ -292,6 +315,7 @@ public class MIDIConvertor : MonoBehaviour
 
         // Preprocessing which takes into account selected sequences to convert
         ProcessMIDIAsBars();
+        StoreFirstNoteTickIndexes();
 
         long firstNoteInBarTick;
         long lastNoteInBarTickEnd;
@@ -309,6 +333,8 @@ public class MIDIConvertor : MonoBehaviour
         // For .song conversion
         double songNoteDuration = 0;
 
+        bool isFirstNoteInBar = true;
+
         foreach (List<MPTKEvent> bar in midiEventsAsBars)
         {
             // TODO: Or, the convertedCount is equal to max bars in song
@@ -317,6 +343,7 @@ public class MIDIConvertor : MonoBehaviour
                 break;
             }
 
+            // Checks if we are not at the last bar
             if (barCount + 1 != midiEventsAsBars.Count)
             {
                 // LastNoteInBarTickEnd looks at the first note in the next bar for appropriate timing
@@ -367,6 +394,16 @@ public class MIDIConvertor : MonoBehaviour
                         }
                         else
                         {
+                            // Only for when we are at the start of the bar
+                            if (isFirstNoteInBar)
+                            {
+                                // Get rid of hardcode to track which bar we are in
+                                long firstNoteTickDifference = currentNote.Tick - firstNoteTickIndexes[0];
+                                double firstNoteTickSongNoteDuration = NoteDurationFromTick(firstNoteTickDifference, barLengthInTicks);
+                                Debug.Log($"Note: -1 Duration: {firstNoteTickSongNoteDuration} [bar: {barCount + 1}]");
+                                songConversion.Add($"-1 {firstNoteTickSongNoteDuration}");
+                                isFirstNoteInBar = false;
+                            }
                             songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
 
                         }
@@ -428,7 +465,7 @@ public class MIDIConvertor : MonoBehaviour
             }
 
             // As we are at the last bar, we can't at the first note in the next bar
-            // Look for tick in the index above the last note in the bar
+            // Look for tick in the index above the last note on in the bar
             else
             {
                 noteCount = bar.Count;
@@ -471,10 +508,6 @@ public class MIDIConvertor : MonoBehaviour
                 }
             }
 
-
-
-
-
             Debug.Log("-------------------");
             convertedCount++;
             barCount++;
@@ -502,52 +535,60 @@ public class MIDIConvertor : MonoBehaviour
         long halfNote = barLengthInTicks / 2;
         long wholeNote = barLengthInTicks;
 
-        double songNoteDuration = 0;
+        float songNoteDuration = 0;
 
         // Some tickDifference conditioning to combat tempo change issues
         tickDifference = (((int)tickDifference + 5) / 10 * 10);
 
-
-
-        if (tickDifference == fiveOneTwo)
+        if (tickDifference == 0)
         {
-            songNoteDuration = 0.00195312;
+            Debug.Log("Tick Difference = 0");
+            songNoteDuration = 0;
+        }
+        else if (tickDifference == fiveOneTwo)
+        {
+            songNoteDuration = 0.00195312f;
         }
         else if (tickDifference == twoFiveSixNote)
         {
-            songNoteDuration = 0.00390625;
+            songNoteDuration = 0.00390625f;
         }
         else if (tickDifference == oneTwoEightNote)
         {
-            songNoteDuration = 0.0078125;
+            songNoteDuration = 0.0078125f;
         }
         else if (tickDifference == sixtyFourNote)
         {
-            songNoteDuration = 0.015625;
+            songNoteDuration = 0.015625f;
         }
         else if (tickDifference == threeTwoNote)
         {
-            songNoteDuration = 0.03125;
+            songNoteDuration = 0.03125f;
         }
         else if (tickDifference == sixteenthNote)
         {
-            songNoteDuration = 0.0625;
+            songNoteDuration = 0.0625f;
         }
         else if (tickDifference == eigthNote)
         {
-            songNoteDuration = 0.125;
+            songNoteDuration = 0.125f;
         }
         else if (tickDifference == quarterNote)
         {
-            songNoteDuration = 0.25;
+            songNoteDuration = 0.25f;
         }
         else if (tickDifference == halfNote)
         {
-            songNoteDuration = 0.5;
+            songNoteDuration = 0.5f;
         }
         else if (tickDifference == wholeNote)
         {
             songNoteDuration = 1;
+        }
+        else
+        {
+            songNoteDuration = (float)tickDifference / barLengthInTicks;
+
         }
 
         return songNoteDuration;
@@ -597,106 +638,99 @@ public class MIDIConvertor : MonoBehaviour
         // Holds all active tracks in the MIDI file
         activeTracks = new List<instrumentChannelTrack>();
 
-        // STEP 1: Parse through and add a list of MIDI information setters
-        if (midiFilePlayer.MPTK_Load() != null)
+        // STEP 1: Parse through and add a list of MIDI information setters (i.e. sequence name, instrument name, attatched channel and track values)
+
+        List<instrumentChannelTrack> midiSetterEvents = new List<instrumentChannelTrack>(16);
+
+        for (int i = 0; i < 16; i++)
         {
-            // Store data on all 16 channels available
-            List<instrumentChannelTrack> midiSetterEvents = new List<instrumentChannelTrack>(16);
-
-            for (int i = 0; i < 16; i++)
-            {
-                midiSetterEvents.Add(new instrumentChannelTrack { instrumentName = "", sequenceName = "", channelIndex = -1, trackIndex = i });
-            }
-
-            foreach (MPTKEvent midiEvent in allMidiEvents)
-            {
-                int trackIndex = (int)midiEvent.Track;
-
-                // Store information of interest
-                if (midiEvent.Meta == MPTKMeta.SequenceTrackName)
-                {
-                    string sequenceName = midiEvent.Info;
-                    midiSetterEvents[trackIndex].sequenceName = sequenceName;
-                    midiSetterEvents[trackIndex].channelIndex = midiEvent.Channel;
-                }
-                else if (midiEvent.Command == MPTKCommand.PatchChange)
-                {
-                    string instrumentName = GetPatchName(midiEvent.Value);
-                    midiSetterEvents[trackIndex].instrumentName = instrumentName;
-                    midiSetterEvents[trackIndex].channelIndex = midiEvent.Channel;
-                }
-            }
-
-            int activeTrackCount = 0;
-
-            // Set active tracks
-            foreach (instrumentChannelTrack ict in midiSetterEvents)
-            {
-                //Debug.Log("Stage 1");
-                if (ict.instrumentName != "")
-                {
-                    //Debug.Log("Stage 2");
-                    if (ict.sequenceName != "")
-                    {
-                        //Debug.Log("Stage 3");
-                        activeTracks.Add(ict);
-                        activeTrackCount++;
-                    }
-                    else
-                    {
-                        ict.sequenceName = "Track " + ict.trackIndex;
-                        activeTracks.Add(ict);
-                        activeTrackCount++;
-
-                    }
-                }
-            }
-
-            if (activeTrackCount == 0)
-            {
-                // Edge case where no information has been given
-                // TODO: Bach - Fugue 
-                Debug.Log("Is this Bach - Fugue?");
-            }
-
-            Debug.Log("Active Tracks...");
-
-            foreach (instrumentChannelTrack ict in activeTracks)
-            {
-                Debug.Log($"Track: {ict.trackIndex} | Sequence: {ict.sequenceName} | Instrument: {ict.instrumentName}");
-            }
-
-            // SET: Tracks on UI as a checklist
-
-            GameObject referenceObject = GameObject.Find("Stop");
-
-            // Hardcoding start coordinates for now
-            Vector3 initCoord = referenceObject.transform.localPosition;
-            int yJump = -50;
-
-            // Set the first location
-            initCoord.y = initCoord.y + (yJump * 2);
-
-            for (int i = 0; i < activeTracks.Count; i++)
-            {
-                GameObject checklistInstance = Instantiate(checklistPrefab, new Vector3(0, 0, 0), Quaternion.identity);
-
-                checklistInstance.transform.SetParent(checklistParent.transform);
-                checklistInstance.transform.localPosition = new Vector3(initCoord.x, initCoord.y + (yJump * i), initCoord.y);
-
-                instrumentChannelTrack currentTrack = activeTracks[i];
-                string sequenceName = currentTrack.sequenceName;
-                string instrumentName = currentTrack.instrumentName;
-                string trackIndex = currentTrack.trackIndex.ToString();
-                string checklistText = ($"{sequenceName} ({currentTrack.instrumentName}) [{trackIndex}]");
-
-                checklistInstance.name = sequenceName;
-                Transform label = checklistInstance.transform.Find("Label");
-                label.GetComponent<UnityEngine.UI.Text>().text = checklistText;
-            }
-
+            midiSetterEvents.Add(new instrumentChannelTrack { instrumentName = "", sequenceName = "", channelIndex = -1, trackIndex = i });
         }
 
+        // Parse all midi events in the file and store information of interest (if a Sequence Track Name/Patch Change is being assigned)
+        foreach (MPTKEvent midiEvent in allMidiEvents)
+        {
+            int trackIndex = (int)midiEvent.Track;
+
+            if (midiEvent.Meta == MPTKMeta.SequenceTrackName)
+            {
+                string sequenceName = midiEvent.Info;
+                midiSetterEvents[trackIndex].sequenceName = sequenceName;
+                midiSetterEvents[trackIndex].channelIndex = midiEvent.Channel;
+            }
+            else if (midiEvent.Command == MPTKCommand.PatchChange)
+            {
+                string instrumentName = GetPatchName(midiEvent.Value);
+                midiSetterEvents[trackIndex].instrumentName = instrumentName;
+                midiSetterEvents[trackIndex].channelIndex = midiEvent.Channel;
+            }
+        }
+
+
+
+        // Set active tracks: tracks that had predefined midi setting events
+        int activeTrackCount = 0;
+        foreach (instrumentChannelTrack ict in midiSetterEvents)
+        {
+            if (ict.instrumentName != "")
+            {
+                if (ict.sequenceName != "")
+                {
+                    activeTracks.Add(ict);
+                    activeTrackCount++;
+                }
+                // Set a generic sequence name if there is not one present
+                else
+                {
+                    ict.sequenceName = "Track " + ict.trackIndex;
+                    activeTracks.Add(ict);
+                    activeTrackCount++;
+
+                }
+            }
+        }
+
+        // Edge case where no information has been given
+        // TODO: Bach - Fugue 
+        if (activeTrackCount == 0)
+        {
+            Debug.Log("Is this Bach - Fugue?");
+        }
+
+        Debug.Log("Active Tracks...");
+
+        foreach (instrumentChannelTrack ict in activeTracks)
+        {
+            Debug.Log($"Track: {ict.trackIndex} | Sequence: {ict.sequenceName} | Instrument: {ict.instrumentName}");
+        }
+
+        // SET: Tracks on UI as a checklist
+        GameObject referenceObject = GameObject.Find("Stop");
+
+        // Hardcoding start coordinates for now
+        Vector3 initCoord = referenceObject.transform.localPosition;
+        int yJump = -50;
+
+        // Set the first location
+        initCoord.y = initCoord.y + (yJump * 2);
+
+        for (int i = 0; i < activeTracks.Count; i++)
+        {
+            GameObject checklistInstance = Instantiate(checklistPrefab, new Vector3(0, 0, 0), Quaternion.identity);
+
+            checklistInstance.transform.SetParent(checklistParent.transform);
+            checklistInstance.transform.localPosition = new Vector3(initCoord.x, initCoord.y + (yJump * i), initCoord.y);
+
+            instrumentChannelTrack currentTrack = activeTracks[i];
+            string sequenceName = currentTrack.sequenceName;
+            string instrumentName = currentTrack.instrumentName;
+            string trackIndex = currentTrack.trackIndex.ToString();
+            string checklistText = ($"{sequenceName} ({currentTrack.instrumentName}) [{trackIndex}]");
+
+            checklistInstance.name = sequenceName;
+            Transform label = checklistInstance.transform.Find("Label");
+            label.GetComponent<UnityEngine.UI.Text>().text = checklistText;
+        }
     }
 
     public void NotesToPlay(List<MPTKEvent> midiEvents)
@@ -766,10 +800,9 @@ public class MIDIConvertor : MonoBehaviour
 
     }
 
+    // TODO: Check if there are any muted channels
     public void PlayMidi()
     {
-        // Check if there are any muted channels
-
         midiFilePlayer.MPTK_Play();
     }
 
