@@ -308,6 +308,89 @@ public class MIDIConvertor : MonoBehaviour
 
     }
 
+    public void ConvertToSongFileNew(int numberOfBarsToConvert)
+    {
+        // Preprocessing which takes into account selected sequences to convert
+        // TODO: Find a more distintive way to figure out the start of the bar, as opposed to the first note on in the midi file
+        ProcessMIDIAsBars();
+        StoreFirstNoteTickIndexes();
+
+        // Count of what bar index we are in
+        int barCount = 0;
+
+        // For .song conversion
+        double songNoteDuration = 0;
+
+        long firstNoteInBarTick;
+        long lastNoteInBarTickEnd;
+        long barLengthInTicks;
+        long tickDifference = 0;
+
+        foreach (List<MPTKEvent> bar in midiEventsAsBars)
+        {
+
+            firstNoteInBarTick = bar[0].Tick;
+            lastNoteInBarTickEnd = midiEventsAsBars[barCount + 1][0].Tick;
+            barLengthInTicks = lastNoteInBarTickEnd - firstNoteInBarTick;
+
+            int numberOfNotes = bar.Count();
+            // Use for loop with i for better accessibility
+            for (int i = 0; i < numberOfNotes; i++)
+            {
+                MPTKEvent currentNote = bar[i];
+                long endOfCurrentNoteTick = currentNote.Tick + currentNote.Length;
+                // Case 1: Start note is empty, only available at the beginning of each bar
+                //if (i == 0)
+                //{
+                //    if (currentNote.Tick != firstNoteTickIndexes[barCount])
+                //    {
+                //        Debug.Log("First note IS empty!");
+                //    }
+                //    else
+                //    {
+                //        Debug.Log("First note is NOT empty");
+                //    }
+                //}
+
+
+                // Case 1: We are not at the end of the bar, therefore nextNote is the following
+                if (i != numberOfNotes - 1)
+                {
+                    MPTKEvent nextNote = bar[i + 1];
+
+                    // The note has been cut off by another note
+                    if (nextNote.Tick < endOfCurrentNoteTick)
+                    {
+                        // Set duration of current note as the difference between itself and the next note
+                        tickDifference = TickDifference(currentNote, nextNote);
+                    }
+                    else
+                    {
+                        // Set duration of current note as the length it's played
+
+                        tickDifference = currentNote.Length;
+                    }
+
+                    songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+
+                    // Check for empty note
+
+                    Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                    songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+                }
+                else
+                {
+                    Debug.Log("We have hit the ELSE case");
+                }
+
+
+
+            }
+
+            barCount++;
+        }
+    }
+
     // Hard coded on the Inspector for now,
     // TODO: Grab a number from UI
     public void ConvertToSongFile(int numberOfBarsToConvert)
