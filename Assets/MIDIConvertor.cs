@@ -473,12 +473,23 @@ public class MIDIConvertor : MonoBehaviour
                         tickDifference = currentNote.Length;
                     }
 
-                    songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
 
-                    // Check for empty note
+                    // Check if the note before was a chord
+                    MPTKEvent prevNote = bar[i - 1];
+                    if (currentNote.Tick == prevNote.Tick)
+                    {
+                        songNoteDuration = 0;
+                        Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                        songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+                    }
+                    else
+                    {
+                        songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+                        Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                        songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+                    }
 
-                    Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
-                    songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+
                     Debug.Log(" --- LN");
 
                 }
