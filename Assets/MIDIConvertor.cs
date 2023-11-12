@@ -29,6 +29,10 @@ public class MIDIConvertor : MonoBehaviour
     private List<MPTKEvent> chordEvent = new List<MPTKEvent>();
     private List<List<MPTKEvent>> chordEvents = new List<List<MPTKEvent>>();
 
+    // Tracks total number of notes when selected track index
+    private int totalNoteCount = 0;
+    private MPTKEvent eventAfterLastNote;
+
     private List<instrumentChannelTrack> activeTracks;
 
     List<long> firstNoteTickIndexes;
@@ -311,15 +315,37 @@ public class MIDIConvertor : MonoBehaviour
 
         // Display the last index of note on events
         int index = 0;
+        bool lastNoteOn = false;
 
-        foreach (MPTKEvent midiEvent in allMidiEvents)
+        // Get total note count to find the index after the last note on
+        foreach (List<MPTKEvent> bar in midiEventsAsBars)
         {
-            if (midiEvent.Command == MPTKCommand.NoteOn)
+            foreach (MPTKEvent note in bar)
             {
-                index++;
+                totalNoteCount++;
             }
         }
 
+        foreach (MPTKEvent midiEvent in allMidiEvents)
+        {
+            if (lastNoteOn == true)
+            {
+                firstNoteTickIndexes.Add(midiEvent.Tick);
+                break;
+            }
+
+            if (midiEvent.Command == MPTKCommand.NoteOn)
+            {
+                index++;
+                // We are at the last note on 
+                if (index == totalNoteCount)
+                {
+                    eventAfterLastNote = midiEvent;
+                    Debug.Log(eventAfterLastNote.ToString());
+                    lastNoteOn = true;
+                }
+            }
+        }
     }
 
     public void ConvertToSongFileNew(int numberOfBarsToConvert)
@@ -341,6 +367,8 @@ public class MIDIConvertor : MonoBehaviour
         long barLengthInTicks;
         long tickDifference = 0;
 
+        int runningNoteCount = 0;
+
         foreach (List<MPTKEvent> bar in midiEventsAsBars)
         {
 
@@ -353,6 +381,7 @@ public class MIDIConvertor : MonoBehaviour
             for (int i = 0; i < numberOfNotes; i++)
             {
                 MPTKEvent currentNote = bar[i];
+                runningNoteCount++;
 
                 // Case 1 - Prepend Empty Note: Start of bar is empty, we check if this is true here
                 if (i == 0)
@@ -416,11 +445,21 @@ public class MIDIConvertor : MonoBehaviour
 
 
                 }
-                // We are at the end of the bar, so the next note is the next in the next set of notes
+                // We are at the end of the bar, so the next note is the next in the next set of notes (unless at the end of the file)
                 else
                 {
                     Debug.Log("LN --- ");
-                    MPTKEvent nextNote = midiEventsAsBars[barCount + 1][0];
+                    MPTKEvent nextNote;
+                    if (runningNoteCount == totalNoteCount)
+                    {
+                        nextNote = eventAfterLastNote;
+
+                    }
+                    else
+                    {
+                        nextNote = midiEventsAsBars[barCount + 1][0];
+                    }
+
                     // The note has been cut off by another note
                     if (nextNote.Tick < endOfCurrentNoteTick)
                     {
@@ -463,212 +502,6 @@ public class MIDIConvertor : MonoBehaviour
                 }
             }
 
-            barCount++;
-        }
-    }
-
-    // Hard coded on the Inspector for now,
-    // TODO: Grab a number from UI
-    public void ConvertToSongFile(int numberOfBarsToConvert)
-    {
-
-        // Preprocessing which takes into account selected sequences to convert
-        ProcessMIDIAsBars();
-        StoreFirstNoteTickIndexes();
-
-        long firstNoteInBarTick;
-        long lastNoteInBarTickEnd;
-        long barLengthInTicks;
-
-        int barCount = 0;
-        int noteCount = 0;
-        int convertedCount = 0;
-
-        long tickDifference = 0;
-
-        // Stores the tick of a current chord
-        long chordInstanceTick = 0;
-
-        // For .song conversion
-        double songNoteDuration = 0;
-
-        bool isFirstNoteInBar = true;
-
-        foreach (List<MPTKEvent> bar in midiEventsAsBars)
-        {
-            // TODO: Or, the convertedCount is equal to max bars in song
-            if (convertedCount == numberOfBarsToConvert)
-            {
-                break;
-            }
-
-            // Checks if we are not at the last bar
-            if (barCount + 1 != midiEventsAsBars.Count)
-            {
-                // LastNoteInBarTickEnd looks at the first note in the next bar for appropriate timing
-                noteCount = bar.Count;
-                firstNoteInBarTick = bar[0].Tick;
-                lastNoteInBarTickEnd = midiEventsAsBars[barCount + 1][0].Tick;
-                barLengthInTicks = lastNoteInBarTickEnd - firstNoteInBarTick;
-
-                Debug.Log("Bar Length In Ticks: " + barLengthInTicks);
-
-                for (int i = 0; i < noteCount; i++)
-                {
-                    MPTKEvent currentNote = bar[i];
-
-                    // Case 1: We are not at the end of the bar, therefore nextNote is the following
-                    if (i != noteCount - 1)
-                    {
-
-                        MPTKEvent nextNote = bar[i + 1];
-
-                        tickDifference = TickDifference(currentNote, nextNote);
-                        if (tickDifference == 0)
-                        {
-                            if (chordEvent.Count == 0)
-                            {
-                                Debug.Log("First Note In Chord Detected");
-
-                            }
-
-                            chordInstanceTick = currentNote.Tick;
-                            //if (chordInstanceTick == 65281)
-                            //{
-                            //    Debug.Log("DEBUGGER TIME");
-                            //}
-                            chordEvent.Add(currentNote);
-                            songNoteDuration = -2;
-
-                        }
-                        // Enters when we are at the last note in the chord set
-                        else if (currentNote.Tick == chordInstanceTick)
-                        {
-                            Debug.Log("Last Note In Chord Detected");
-                            chordEvent.Add(currentNote);
-                            chordEvents.Add(chordEvent.ToList());
-                            chordEvent.Clear();
-                            songNoteDuration = -2;
-
-                        }
-                        else
-                        {
-                            // Only for when we are at the start of the bar
-                            if (isFirstNoteInBar)
-                            {
-                                // Get rid of hardcode to track which bar we are in
-                                long firstNoteTickDifference = currentNote.Tick - firstNoteTickIndexes[0];
-                                double firstNoteTickSongNoteDuration = NoteDurationFromTick(firstNoteTickDifference, barLengthInTicks);
-                                Debug.Log($"Note: -1 Duration: {firstNoteTickSongNoteDuration} [bar: {barCount + 1}]");
-                                songConversion.Add($"-1 {firstNoteTickSongNoteDuration}");
-                                isFirstNoteInBar = false;
-                            }
-                            songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-
-                        }
-
-
-                    }
-                    // Case 2: We are at the end of the bar, therefore nextNote is the first note in the following bar
-                    else
-                    {
-                        MPTKEvent nextNote = midiEventsAsBars[barCount + 1][0];
-
-                        // Edge case: Check we are not at the last bar
-
-                        if (barCount != midiEventsAsBars.Count)
-                        {
-                            // Edge case: Last note should wrap to the first note in the next bar
-
-
-
-                            tickDifference = TickDifference(currentNote, nextNote);
-                            if (tickDifference == 0)
-                            {
-                                if (chordEvent.Count == 0)
-                                {
-                                    Debug.Log("First Note In Chord Detected");
-
-                                }
-
-                                chordInstanceTick = currentNote.Tick;
-                                //if (chordInstanceTick == 65281)
-                                //{
-                                //    Debug.Log("DEBUGGER TIME");
-                                //}
-                                chordEvent.Add(currentNote);
-                                songNoteDuration = -2;
-
-                            }
-                            // Enters when we are at the last note in the chord set
-                            else if (currentNote.Tick == chordInstanceTick)
-                            {
-                                Debug.Log("Last Note In Chord Detected");
-                                chordEvent.Add(currentNote);
-                                chordEvents.Add(chordEvent.ToList());
-                                chordEvent.Clear();
-                                songNoteDuration = -2;
-
-                            }
-                            else
-                            {
-                                songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-                            }
-                        }
-                    }
-                    Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
-                    songConversion.Add($"{currentNote.Value} {songNoteDuration}");
-
-
-                }
-            }
-
-            // As we are at the last bar, we can't at the first note in the next bar
-            // Look for tick in the index above the last note on in the bar
-            else
-            {
-                noteCount = bar.Count;
-
-                // Look at last note, then one index above (to find ending tick)
-                int lastNoteInBarEndIndex = bar[noteCount - 1].Index + 1;
-
-
-                firstNoteInBarTick = bar[0].Tick;
-                lastNoteInBarTickEnd = allMidiEvents[lastNoteInBarEndIndex].Tick;
-                barLengthInTicks = lastNoteInBarTickEnd - firstNoteInBarTick;
-
-                for (int i = 0; i < noteCount; i++)
-                {
-                    MPTKEvent currentNote = bar[i];
-
-                    if (i != noteCount - 1)
-                    {
-                        tickDifference = TickDifference(bar[i], bar[i + 1]);
-                        songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-                    }
-                    else
-                    {
-                        // Edge case: Check we are not at the last bar
-
-                        if (barCount != midiEventsAsBars.Count)
-                        {
-                            // Edge case: Last note should wrap to the first note in the next bar
-
-
-
-                            tickDifference = TickDifference(bar[i], allMidiEvents[lastNoteInBarEndIndex]);
-                            songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-                        }
-                    }
-                    Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
-                    songConversion.Add($"{currentNote.Value} {songNoteDuration}");
-
-
-                }
-            }
-
-            Debug.Log("-------------------");
-            convertedCount++;
             barCount++;
         }
     }
@@ -891,10 +724,10 @@ public class MIDIConvertor : MonoBehaviour
             label.GetComponent<UnityEngine.UI.Text>().text = checklistText;
 
             // TO REMOVE: Speeds up debugging, as it presets what tracks are selected
-            if (i > 1)
-            {
-                checklistInstance.transform.GetComponent<UnityEngine.UI.Toggle>().isOn = false;
-            }
+            //if (i > 1)
+            //{
+            //    checklistInstance.transform.GetComponent<UnityEngine.UI.Toggle>().isOn = false;
+            //}
         }
     }
 
