@@ -286,6 +286,7 @@ public class MIDIConvertor : MonoBehaviour
 
         int currentMeasure = 1;
 
+        // Adds start index of each bar, based on the measure
         foreach (MPTKEvent midiEvent in allMidiEvents)
         {
             if (midiEvent.Command == MPTKCommand.NoteOn)
@@ -303,6 +304,19 @@ public class MIDIConvertor : MonoBehaviour
                     Debug.Log("First Note Tick Index: " + midiEvent.Tick);
                     isFirstNote = false;
                 }
+            }
+        }
+
+        // Adds start index of the bar after the last
+
+        // Display the last index of note on events
+        int index = 0;
+
+        foreach (MPTKEvent midiEvent in allMidiEvents)
+        {
+            if (midiEvent.Command == MPTKCommand.NoteOn)
+            {
+                index++;
             }
         }
 
@@ -331,7 +345,8 @@ public class MIDIConvertor : MonoBehaviour
         {
 
             firstNoteInBarTick = bar[0].Tick;
-            lastNoteInBarTickEnd = midiEventsAsBars[barCount + 1][0].Tick;
+            //lastNoteInBarTickEnd = midiEventsAsBars[barCount + 1][0].Tick;
+            lastNoteInBarTickEnd = firstNoteTickIndexes[barCount + 1];
             barLengthInTicks = lastNoteInBarTickEnd - firstNoteInBarTick;
             int numberOfNotes = bar.Count();
 
@@ -350,7 +365,7 @@ public class MIDIConvertor : MonoBehaviour
                         tickDifference = currentNote.Tick - startOfBarIndex;
                         songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
 
-                        Debug.Log($"[index: {currentNote.Index}++] Note: {-1} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                        Debug.Log($"[++index: {currentNote.Index}] Note: {-1} Duration: {songNoteDuration} [bar: {barCount + 1}]");
                         songConversion.Add($"{currentNote.Value} {songNoteDuration}");
 
                     }
@@ -404,7 +419,7 @@ public class MIDIConvertor : MonoBehaviour
                 // We are at the end of the bar, so the next note is the next in the next set of notes
                 else
                 {
-                    Debug.Log("Last Note");
+                    Debug.Log("LN --- ");
                     MPTKEvent nextNote = midiEventsAsBars[barCount + 1][0];
                     // The note has been cut off by another note
                     if (nextNote.Tick < endOfCurrentNoteTick)
@@ -425,12 +440,27 @@ public class MIDIConvertor : MonoBehaviour
 
                     Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
                     songConversion.Add($"{currentNote.Value} {songNoteDuration}");
-                    Debug.Log("Last Note");
+                    Debug.Log(" --- LN");
 
                 }
 
+                // Case 2 - Append Empty Note: Distance between start of new bar, and end of last note 
+                if (i == numberOfNotes - 1)
+                {
+                    long startOfNextBarIndex = firstNoteTickIndexes[barCount + 1];
 
-
+                    // We use + 1 to give some tolerence to potential MIDI setter events taking 
+                    // i.e. Bach example, end of Bar 33
+                    if ((endOfCurrentNoteTick + 1) < startOfNextBarIndex)
+                    {
+                        tickDifference = startOfNextBarIndex - endOfCurrentNoteTick;
+                        songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+                        Debug.Log("EndOfCurrentNoteTick: " + endOfCurrentNoteTick);
+                        Debug.Log("StartOfNextBarIndex: " + startOfNextBarIndex);
+                        Debug.Log($"[index: {currentNote.Index}+++] Note: {-1} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                        songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+                    }
+                }
             }
 
             barCount++;
@@ -859,6 +889,12 @@ public class MIDIConvertor : MonoBehaviour
             checklistInstance.name = sequenceName;
             Transform label = checklistInstance.transform.Find("Label");
             label.GetComponent<UnityEngine.UI.Text>().text = checklistText;
+
+            // TO REMOVE: Speeds up debugging, as it presets what tracks are selected
+            if (i > 1)
+            {
+                checklistInstance.transform.GetComponent<UnityEngine.UI.Toggle>().isOn = false;
+            }
         }
     }
 
