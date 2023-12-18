@@ -25,6 +25,7 @@
     <string>Bach - Toccata in D minor Organ</string>
     <string>Bach - Toccata in D minor Piano</string>
     <string>Bach - Trisonate 3iem mvt</string>
+    <string>Bach Prelude</string>
     <string>bach_846</string>
     <string>Baez Joan - Here's to You</string>
     <string>Baez Joan - Plaisir D'Amour</string>
@@ -116,6 +117,7 @@
     <string>Wii Theme</string>
     <string>WishYouWereHere</string>
     <string>Yiruma River Flows In You</string>
+    <string>Yiruma River Flows In You TEST</string>
     <string>Yves Montand - A bicyclette</string>
     <string>Zagronia - Dw1gOver</string>
   </MidiFiles>

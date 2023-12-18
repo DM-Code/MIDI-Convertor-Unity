@@ -36,6 +36,7 @@ public class MIDIConvertor : MonoBehaviour
     private List<instrumentChannelTrack> activeTracks;
 
     List<long> firstNoteTickIndexes;
+    int barLengthInTicks;
 
     private bool loopFinished;
 
@@ -60,6 +61,9 @@ public class MIDIConvertor : MonoBehaviour
         {
             allMidiEvents = midiFilePlayer.MPTK_ReadMidiEvents();
 
+            // Set bar length in ticks
+            barLengthInTicks = midiFilePlayer.MPTK_DeltaTicksPerQuarterNote * 4;
+            Debug.Log("Bar Length in Ticks: " + barLengthInTicks);
             // Stores the instrument, sequence name, track and channel for each unique MIDI 
             ProcessImportantMIDIData();
 
@@ -293,9 +297,10 @@ public class MIDIConvertor : MonoBehaviour
     {
         bool isFirstNoteInBar = true;
         bool isFirstInstance = true;
+        int firstNoteTickIndex;
         firstNoteTickIndexes = new List<long>();
-
         int currentMeasure = 1;
+        int barNumber = 1;
 
         // Adds start index of each bar, based on the measure
         foreach (MPTKEvent midiEvent in allMidiEvents)
@@ -307,6 +312,7 @@ public class MIDIConvertor : MonoBehaviour
                 {
                     isFirstNoteInBar = true;
                     currentMeasure = midiEvent.Measure;
+                    barNumber += 1;
                 }
 
                 if (isFirstNoteInBar)
@@ -314,8 +320,8 @@ public class MIDIConvertor : MonoBehaviour
                     // Check to see if the first note in the whole midi is tick 0, if not, it sets it
                     if (isFirstInstance)
                     {
-
-                        firstNoteTickIndexes.Add(0);
+                        firstNoteTickIndex = 0;
+                        firstNoteTickIndexes.Add(firstNoteTickIndex);
                         Debug.Log("First Note Tick Index: " + 0);
 
 
@@ -324,8 +330,9 @@ public class MIDIConvertor : MonoBehaviour
                     }
                     else
                     {
-                        firstNoteTickIndexes.Add(midiEvent.Tick);
-                        Debug.Log("First Note Tick Index: " + midiEvent.Tick);
+                        firstNoteTickIndex = barLengthInTicks * (barNumber - 1);
+                        firstNoteTickIndexes.Add(firstNoteTickIndex);
+                        Debug.Log("First Note Tick Index: " + firstNoteTickIndex);
                         isFirstNoteInBar = false;
                     }
 
@@ -334,41 +341,10 @@ public class MIDIConvertor : MonoBehaviour
             }
         }
 
-        // Adds start index of the bar after the last
-
-        // Display the last index of note on events
-        int index = 0;
-        bool lastNoteOn = false;
-
-        // Get total note count to find the index after the last note on
-        foreach (List<MPTKEvent> bar in midiEventsAsBars)
-        {
-            foreach (MPTKEvent note in bar)
-            {
-                totalNoteCount++;
-            }
-        }
-
-        foreach (MPTKEvent midiEvent in allMidiEvents)
-        {
-            if (lastNoteOn == true)
-            {
-                firstNoteTickIndexes.Add(midiEvent.Tick);
-                break;
-            }
-
-            if (midiEvent.Command == MPTKCommand.NoteOn)
-            {
-                index++;
-                // We are at the last note on 
-                if (index == totalNoteCount)
-                {
-                    eventAfterLastNote = midiEvent;
-                    Debug.Log(eventAfterLastNote.ToString());
-                    lastNoteOn = true;
-                }
-            }
-        }
+        // Store the last 2 bars first note tick
+        firstNoteTickIndex = barLengthInTicks * barNumber;
+        firstNoteTickIndexes.Add(firstNoteTickIndex);
+        Debug.Log("First Note Tick Index: " + firstNoteTickIndex);
     }
 
     public void ConvertToSongFileNew(int numberOfBarsToConvert)
@@ -385,9 +361,11 @@ public class MIDIConvertor : MonoBehaviour
         // For .song conversion
         double songNoteDuration = 0;
 
+        double durationCounter;
+
+        long startOfBarIndex;
         long firstNoteInBarTick;
         long lastNoteInBarTickEnd;
-        long barLengthInTicks;
         long tickDifference = 0;
 
         int runningNoteCount = 0;
@@ -396,12 +374,13 @@ public class MIDIConvertor : MonoBehaviour
             foreach (List<MPTKEvent> bar in midiEventsAsBars)
             {
 
+                startOfBarIndex = firstNoteTickIndexes[barCount];
 
                 firstNoteInBarTick = bar[0].Tick;
                 //firstNoteInBarTick = firstNoteTickIndexes[barCount];
                 //lastNoteInBarTickEnd = midiEventsAsBars[barCount + 1][0].Tick;
                 lastNoteInBarTickEnd = firstNoteTickIndexes[barCount + 1];
-                barLengthInTicks = lastNoteInBarTickEnd - firstNoteInBarTick;
+
                 int numberOfNotes = bar.Count();
 
                 for (int i = 0; i < numberOfNotes; i++)
@@ -412,7 +391,6 @@ public class MIDIConvertor : MonoBehaviour
                     // Case 1 - Prepend Empty Note: Start of bar is empty, we check if this is true here
                     if (i == 0)
                     {
-                        long startOfBarIndex = firstNoteTickIndexes[barCount];
 
                         // First note is empty when entered, record the duration and log
                         if (currentNote.Tick != startOfBarIndex)
@@ -447,12 +425,6 @@ public class MIDIConvertor : MonoBehaviour
 
                             songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
 
-                            // NOTE: Remove the beneath two code for the same behaviour as beforehand
-                            // Set duration of current note as the length it's played
-                            //tickDifference = currentNote.Length;
-
-                            //songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-
                             // Check for empty note
 
                             Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
@@ -462,7 +434,6 @@ public class MIDIConvertor : MonoBehaviour
                         {
                             // Set duration of current note as the length it's played
                             tickDifference = currentNote.Length;
-
                             songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
 
 
@@ -497,16 +468,32 @@ public class MIDIConvertor : MonoBehaviour
                             nextNote = midiEventsAsBars[barCount + 1][0];
                         }
 
-                        // The note has been cut off by another note
-                        if (nextNote.Tick < endOfCurrentNoteTick)
+                        //// The note has been cut off by another note
+                        //if (nextNote.Tick < endOfCurrentNoteTick)
+                        //{
+                        //    // Set duration of current note as the difference between itself and the next note
+                        //    tickDifference = TickDifference(currentNote, nextNote);
+                        //}
+                        //else
+                        //{
+                        //    // Set duration of current note as the length it's played
+
+                        //    tickDifference = currentNote.Length;
+                        //}
+
+
+                        // Check if length of note overruns into next bar
+                        long endTick = currentNote.Tick + currentNote.Length;
+
+                        if (endTick > lastNoteInBarTickEnd)
                         {
-                            // Set duration of current note as the difference between itself and the next note
-                            tickDifference = TickDifference(currentNote, nextNote);
+                            Debug.Log("This note OVERRUNS");
+
+                            // We make it the remaining length from the last note to the start of the next bar
+                            tickDifference = lastNoteInBarTickEnd - currentNote.Tick;
                         }
                         else
                         {
-                            // Set duration of current note as the length it's played
-
                             tickDifference = currentNote.Length;
                         }
 
