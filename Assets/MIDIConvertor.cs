@@ -383,6 +383,11 @@ public class MIDIConvertor : MonoBehaviour
 
                 int numberOfNotes = bar.Count();
 
+                if (barCount == 3)
+                {
+                    // Do nothing
+                }
+
                 for (int i = 0; i < numberOfNotes; i++)
                 {
                     MPTKEvent currentNote = bar[i];
@@ -501,12 +506,21 @@ public class MIDIConvertor : MonoBehaviour
 
 
                         // Check if the note before was a chord
-                        MPTKEvent prevNote = bar[i - 1];
-                        if (currentNote.Tick == prevNote.Tick)
+                        if (i != 0)
                         {
-                            songNoteDuration = 0;
-                            Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
-                            songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+                            MPTKEvent prevNote = bar[i - 1];
+                            if (currentNote.Tick == prevNote.Tick)
+                            {
+                                songNoteDuration = 0;
+                                Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                                songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+                            }
+                            else
+                            {
+                                songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+                                Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                                songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+                            }
                         }
                         else
                         {
@@ -514,6 +528,7 @@ public class MIDIConvertor : MonoBehaviour
                             Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
                             songConversion.Add($"{currentNote.Value} {songNoteDuration}");
                         }
+
                         Debug.Log(" --- LN");
 
 
@@ -528,6 +543,7 @@ public class MIDIConvertor : MonoBehaviour
 
                         // We use + 1 to give some tolerence to potential MIDI setter events taking 
                         // i.e. Bach example, end of Bar 33
+                        // Enters if the last note in the bar tick finishes before the start tick of the next bar
                         if ((endOfCurrentNoteTick + 1) < startOfNextBarIndex)
                         {
                             tickDifference = startOfNextBarIndex - endOfCurrentNoteTick;
