@@ -12,6 +12,8 @@
   <IndexSelectedSF>0</IndexSelectedSF>
   <MidiFiles>
     <string>@ All Rights Reserved for these Midi Files</string>
+    <string>A Whole New World</string>
+    <string>Adele - Someone Like You</string>
     <string>Albinoni - Adagio</string>
     <string>All Night Long</string>
     <string>Animal Crossing</string>
@@ -43,6 +45,7 @@
     <string>DarkCloud2</string>
     <string>Debussy - Clair De Lune</string>
     <string>Debussy - Clair De Lune V2</string>
+    <string>Disney Theme</string>
     <string>Donkey Kong - Country</string>
     <string>Donkey Kong - Theme</string>
     <string>Dragon Ball Z - Battle Theme1</string>
@@ -54,6 +57,11 @@
     <string>Faure - Requiem</string>
     <string>Final Fantasy - Village</string>
     <string>Fire Emblem 3 - Theme</string>
+    <string>Frank Sinatra - Fly Me To The Moon</string>
+    <string>Fur Elise - Beethoven</string>
+    <string>Harry Potter - TEST</string>
+    <string>Harry Potter - Theme</string>
+    <string>Harry Potter - Theme 2</string>
     <string>Higelin Jacques - Champagne</string>
     <string>kakariko</string>
     <string>ladolcevita</string>
@@ -81,8 +89,11 @@
     <string>MPTK_Example 0021</string>
     <string>Nirvana - Smells Like Teen Spirit</string>
     <string>Palm Bricks</string>
+    <string>Paradise - Coldplay</string>
     <string>Patti Smith - Because the Night</string>
     <string>Pergolesi - Stabat Mater</string>
+    <string>Pink Panther</string>
+    <string>Pink Panther 2</string>
     <string>Reayo - Amor de Hombre</string>
     <string>Salvador Henri - Jardin D'hiver</string>
     <string>Satie - Gnossienne 4</string>
@@ -92,15 +103,19 @@
     <string>Satie - Trois Gnossiennes</string>
     <string>Sibelius - Finlandia</string>
     <string>Sibelius - Romance</string>
+    <string>Super Mario Bros. Theme</string>
     <string>Take 5 - by Paul Desmond</string>
     <string>Tchaikovsky - Flower Waltz</string>
+    <string>Tetris Theme</string>
     <string>Tetris2</string>
     <string>The Christmas Song</string>
     <string>To Make the End of Battle</string>
     <string>Van Morrison - Moondance</string>
     <string>Van Morrison - Wild Nights</string>
     <string>Void World's 2nd Half</string>
+    <string>Wii Theme</string>
     <string>WishYouWereHere</string>
+    <string>Yiruma River Flows In You</string>
     <string>Yves Montand - A bicyclette</string>
     <string>Zagronia - Dw1gOver</string>
   </MidiFiles>

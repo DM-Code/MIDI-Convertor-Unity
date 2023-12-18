@@ -86,9 +86,10 @@ public class MIDIConvertor : MonoBehaviour
 
     public void SaveFile()
     {
+        ConvertToMetaFile();
         string songsFolderPath = Application.persistentDataPath + "/songs/";
 
-        string songName = midiFilePlayer.MPTK_MidiName;
+        string songName = midiFilePlayer.MPTK_MidiName.ToLower();
         string songFileName = songName + ".song";
         string songMetaFileName = songName + ".meta";
 
@@ -148,7 +149,7 @@ public class MIDIConvertor : MonoBehaviour
                 }
             }
 
-            Debug.Log($"File: '{songFileName}' has been saved in {destination}");
+            Debug.Log($"File: '{songMetaFileName}' has been saved in {destination}");
 
         }
 
@@ -192,6 +193,11 @@ public class MIDIConvertor : MonoBehaviour
             // First text event is USUALLY the artist name
             artistName = fileMetaData.Split('\n')[0];
 
+            if (artistName == "")
+            {
+                artistName = "No Artist Included";
+
+            }
 
             metaConversion.Add(artistName);
             metaConversion.Add(stageLevel.ToString());
@@ -285,7 +291,8 @@ public class MIDIConvertor : MonoBehaviour
 
     public void StoreFirstNoteTickIndexes()
     {
-        bool isFirstNote = true;
+        bool isFirstNoteInBar = true;
+        bool isFirstInstance = true;
         firstNoteTickIndexes = new List<long>();
 
         int currentMeasure = 1;
@@ -298,15 +305,31 @@ public class MIDIConvertor : MonoBehaviour
                 // We are in a new bar
                 if (currentMeasure != midiEvent.Measure)
                 {
-                    isFirstNote = true;
+                    isFirstNoteInBar = true;
                     currentMeasure = midiEvent.Measure;
                 }
 
-                if (isFirstNote)
+                if (isFirstNoteInBar)
                 {
-                    firstNoteTickIndexes.Add(midiEvent.Tick);
-                    Debug.Log("First Note Tick Index: " + midiEvent.Tick);
-                    isFirstNote = false;
+                    // Check to see if the first note in the whole midi is tick 0, if not, it sets it
+                    if (isFirstInstance)
+                    {
+
+                        firstNoteTickIndexes.Add(0);
+                        Debug.Log("First Note Tick Index: " + 0);
+
+
+                        isFirstInstance = false;
+                        isFirstNoteInBar = false;
+                    }
+                    else
+                    {
+                        firstNoteTickIndexes.Add(midiEvent.Tick);
+                        Debug.Log("First Note Tick Index: " + midiEvent.Tick);
+                        isFirstNoteInBar = false;
+                    }
+
+
                 }
             }
         }
@@ -368,153 +391,182 @@ public class MIDIConvertor : MonoBehaviour
         long tickDifference = 0;
 
         int runningNoteCount = 0;
-
-        foreach (List<MPTKEvent> bar in midiEventsAsBars)
+        try
         {
-
-            firstNoteInBarTick = bar[0].Tick;
-            //lastNoteInBarTickEnd = midiEventsAsBars[barCount + 1][0].Tick;
-            lastNoteInBarTickEnd = firstNoteTickIndexes[barCount + 1];
-            barLengthInTicks = lastNoteInBarTickEnd - firstNoteInBarTick;
-            int numberOfNotes = bar.Count();
-
-            for (int i = 0; i < numberOfNotes; i++)
+            foreach (List<MPTKEvent> bar in midiEventsAsBars)
             {
-                MPTKEvent currentNote = bar[i];
-                runningNoteCount++;
 
-                // Case 1 - Prepend Empty Note: Start of bar is empty, we check if this is true here
-                if (i == 0)
+
+                firstNoteInBarTick = bar[0].Tick;
+                //firstNoteInBarTick = firstNoteTickIndexes[barCount];
+                //lastNoteInBarTickEnd = midiEventsAsBars[barCount + 1][0].Tick;
+                lastNoteInBarTickEnd = firstNoteTickIndexes[barCount + 1];
+                barLengthInTicks = lastNoteInBarTickEnd - firstNoteInBarTick;
+                int numberOfNotes = bar.Count();
+
+                for (int i = 0; i < numberOfNotes; i++)
                 {
-                    long startOfBarIndex = firstNoteTickIndexes[barCount];
+                    MPTKEvent currentNote = bar[i];
+                    runningNoteCount++;
 
-                    // First note is empty when entered, record the duration and log
-                    if (currentNote.Tick != startOfBarIndex)
+                    // Case 1 - Prepend Empty Note: Start of bar is empty, we check if this is true here
+                    if (i == 0)
                     {
-                        tickDifference = currentNote.Tick - startOfBarIndex;
-                        songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+                        long startOfBarIndex = firstNoteTickIndexes[barCount];
 
-                        Debug.Log($"[++index: {currentNote.Index}] Note: {-1} Duration: {songNoteDuration} [bar: {barCount + 1}]");
-                        songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+                        // First note is empty when entered, record the duration and log
+                        if (currentNote.Tick != startOfBarIndex)
+                        {
+                            tickDifference = currentNote.Tick - startOfBarIndex;
+                            songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
 
+                            Debug.Log($"[++index: {currentNote.Index}] Note: {-1} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                            songConversion.Add($"{-1} {songNoteDuration}");
+
+                        }
+                    }
+
+                    // Continue as usual otherwise
+                    long endOfCurrentNoteTick = currentNote.Tick + currentNote.Length;
+
+                    // We are not at the end of the bar, therefore nextNote is the following
+                    if (i != numberOfNotes - 1)
+                    {
+                        MPTKEvent nextNote = bar[i + 1];
+
+                        if (barCount + 1 == 13)
+                        {
+                            Debug.Log("Debug Time");
+                        }
+
+                        // The note has been cut off by another note, or it's length is the same
+                        if (nextNote.Tick <= endOfCurrentNoteTick)
+                        {
+                            // Set duration of current note as the difference between itself and the next note
+                            tickDifference = TickDifference(currentNote, nextNote);
+
+                            songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+
+                            // NOTE: Remove the beneath two code for the same behaviour as beforehand
+                            // Set duration of current note as the length it's played
+                            //tickDifference = currentNote.Length;
+
+                            //songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+
+                            // Check for empty note
+
+                            Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                            songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+                        }
+                        else
+                        {
+                            // Set duration of current note as the length it's played
+                            tickDifference = currentNote.Length;
+
+                            songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+
+
+                            Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                            songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+
+
+                            // Case 2 - Inbetween Empty Note: Note inbetween is empty as the length of the note played isn't cut off
+
+                            // Record the empty note between the end of the current note and the next note
+                            tickDifference = nextNote.Tick - endOfCurrentNoteTick;
+                            songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+
+                            Debug.Log($"[index: {currentNote.Index}++] Note: {-1} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                            songConversion.Add($"{-1} {songNoteDuration}");
+                        }
+
+
+                    }
+                    // We are at the end of the bar, so the next note is the next in the next set of notes (unless at the end of the file)
+                    else
+                    {
+                        Debug.Log("LN --- ");
+                        MPTKEvent nextNote;
+                        if (runningNoteCount == totalNoteCount)
+                        {
+                            nextNote = eventAfterLastNote;
+
+                        }
+                        else
+                        {
+                            nextNote = midiEventsAsBars[barCount + 1][0];
+                        }
+
+                        // The note has been cut off by another note
+                        if (nextNote.Tick < endOfCurrentNoteTick)
+                        {
+                            // Set duration of current note as the difference between itself and the next note
+                            tickDifference = TickDifference(currentNote, nextNote);
+                        }
+                        else
+                        {
+                            // Set duration of current note as the length it's played
+
+                            tickDifference = currentNote.Length;
+                        }
+
+
+
+
+                        // Check if the note before was a chord
+                        MPTKEvent prevNote = bar[i - 1];
+                        if (currentNote.Tick == prevNote.Tick)
+                        {
+                            songNoteDuration = 0;
+                            Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                            songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+                        }
+                        else
+                        {
+                            songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+                            Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                            songConversion.Add($"{currentNote.Value} {songNoteDuration}");
+                        }
+                        Debug.Log(" --- LN");
+
+
+
+
+                    }
+
+                    // Case 2 - Append Empty Note: Distance between start of new bar, and end of last note 
+                    if (i == numberOfNotes - 1)
+                    {
+                        long startOfNextBarIndex = firstNoteTickIndexes[barCount + 1];
+
+                        // We use + 1 to give some tolerence to potential MIDI setter events taking 
+                        // i.e. Bach example, end of Bar 33
+                        if ((endOfCurrentNoteTick + 1) < startOfNextBarIndex)
+                        {
+                            tickDifference = startOfNextBarIndex - endOfCurrentNoteTick;
+                            songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
+                            Debug.Log("EndOfCurrentNoteTick: " + endOfCurrentNoteTick);
+                            Debug.Log("StartOfNextBarIndex: " + startOfNextBarIndex);
+                            Debug.Log($"[index: {currentNote.Index}+++] Note: {-1} Duration: {songNoteDuration} [bar: {barCount + 1}]");
+                            songConversion.Add($"{-1} {songNoteDuration}");
+                        }
                     }
                 }
 
-                // Continue as usual otherwise
-                long endOfCurrentNoteTick = currentNote.Tick + currentNote.Length;
+                barCount++;
 
-                // We are not at the end of the bar, therefore nextNote is the following
-                if (i != numberOfNotes - 1)
-                {
-                    MPTKEvent nextNote = bar[i + 1];
-
-                    // The note has been cut off by another note, or it's length is the same
-                    if (nextNote.Tick <= endOfCurrentNoteTick)
-                    {
-                        // Set duration of current note as the difference between itself and the next note
-                        tickDifference = TickDifference(currentNote, nextNote);
-
-                        songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-
-                        // Check for empty note
-
-                        Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
-                        songConversion.Add($"{currentNote.Value} {songNoteDuration}");
-                    }
-                    else
-                    {
-                        // Set duration of current note as the length it's played
-                        tickDifference = currentNote.Length;
-
-                        songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-
-
-                        Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
-                        songConversion.Add($"{currentNote.Value} {songNoteDuration}");
-
-
-                        // Case 2 - Inbetween Empty Note: Note inbetween is empty as the length of the note played isn't cut off
-
-                        // Record the empty note between the end of the current note and the next note
-                        tickDifference = nextNote.Tick - endOfCurrentNoteTick;
-                        songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-
-                        Debug.Log($"[index: {currentNote.Index}++] Note: {-1} Duration: {songNoteDuration} [bar: {barCount + 1}]");
-                        songConversion.Add($"{currentNote.Value} {songNoteDuration}");
-                    }
-
-
-                }
-                // We are at the end of the bar, so the next note is the next in the next set of notes (unless at the end of the file)
-                else
-                {
-                    Debug.Log("LN --- ");
-                    MPTKEvent nextNote;
-                    if (runningNoteCount == totalNoteCount)
-                    {
-                        nextNote = eventAfterLastNote;
-
-                    }
-                    else
-                    {
-                        nextNote = midiEventsAsBars[barCount + 1][0];
-                    }
-
-                    // The note has been cut off by another note
-                    if (nextNote.Tick < endOfCurrentNoteTick)
-                    {
-                        // Set duration of current note as the difference between itself and the next note
-                        tickDifference = TickDifference(currentNote, nextNote);
-                    }
-                    else
-                    {
-                        // Set duration of current note as the length it's played
-
-                        tickDifference = currentNote.Length;
-                    }
-
-
-                    // Check if the note before was a chord
-                    MPTKEvent prevNote = bar[i - 1];
-                    if (currentNote.Tick == prevNote.Tick)
-                    {
-                        songNoteDuration = 0;
-                        Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
-                        songConversion.Add($"{currentNote.Value} {songNoteDuration}");
-                    }
-                    else
-                    {
-                        songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-                        Debug.Log($"[index: {currentNote.Index}] Note: {currentNote.Value} Duration: {songNoteDuration} [bar: {barCount + 1}]");
-                        songConversion.Add($"{currentNote.Value} {songNoteDuration}");
-                    }
-
-
-                    Debug.Log(" --- LN");
-
-                }
-
-                // Case 2 - Append Empty Note: Distance between start of new bar, and end of last note 
-                if (i == numberOfNotes - 1)
-                {
-                    long startOfNextBarIndex = firstNoteTickIndexes[barCount + 1];
-
-                    // We use + 1 to give some tolerence to potential MIDI setter events taking 
-                    // i.e. Bach example, end of Bar 33
-                    if ((endOfCurrentNoteTick + 1) < startOfNextBarIndex)
-                    {
-                        tickDifference = startOfNextBarIndex - endOfCurrentNoteTick;
-                        songNoteDuration = NoteDurationFromTick(tickDifference, barLengthInTicks);
-                        Debug.Log("EndOfCurrentNoteTick: " + endOfCurrentNoteTick);
-                        Debug.Log("StartOfNextBarIndex: " + startOfNextBarIndex);
-                        Debug.Log($"[index: {currentNote.Index}+++] Note: {-1} Duration: {songNoteDuration} [bar: {barCount + 1}]");
-                        songConversion.Add($"{currentNote.Value} {songNoteDuration}");
-                    }
-                }
             }
-
-            barCount++;
         }
+        catch
+        {
+            Debug.Log("Out of index error to fix");
+        }
+        finally
+        {
+            SaveFile();
+
+        }
+
     }
 
     private long TickDifference(MPTKEvent note1, MPTKEvent note2)
@@ -540,8 +592,9 @@ public class MIDIConvertor : MonoBehaviour
 
         float songNoteDuration = 0;
 
-        // Some tickDifference conditioning to combat tempo change issues
-        tickDifference = (((int)tickDifference + 5) / 10 * 10);
+        // TODO: Need to remember why this is needed, as it did cause unusual behaviour for adele song conversion of 16th notes
+        // Some tickDifference conditioning to combat tempo change issues (rounds up/down)
+        //tickDifference = (((int)tickDifference + 5) / 10 * 10);
 
         if (tickDifference == 0)
         {

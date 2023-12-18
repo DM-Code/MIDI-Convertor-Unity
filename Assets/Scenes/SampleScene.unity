@@ -1435,7 +1435,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: -4.407959}
+  m_AnchoredPosition: {x: 0, y: -4.40802}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &637079855
@@ -2505,10 +2505,10 @@ MonoBehaviour:
   MPTK_ModeSpatializer: 0
   MPTK_MaxSpatialSynth: 0
   MPTK_SpatialSynthEnabled: 0
-  midiNameToPlay: bach_846
+  midiNameToPlay: Harry Potter - Theme
   MPTK_StartPlayAtFirstNote: 0
   MPTK_ModeStopVoice: 0
-  midiIndexToPlay: 12
+  midiIndexToPlay: 44
   speed: 1
   durationEditorModeOnly: 
   playTimeEditorModeOnly: 
